@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  GARCOM
+  COZINHA
+  CAIXA
+}
+
+enum OrderStatus {
+  OPEN
+  SENT_TO_KITCHEN
+  READY
+  WAITING_PAYMENT
+  CLOSED
+  CANCELED
+}
+
+enum PaymentMethod {
+  DINHEIRO
+  CARTAO
+  PIX
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  pin       String
+  role      Role     @default(GARCOM)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  priceCents Int
+  imageUrl   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  items      OrderItem[]
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  code           String      @unique
+  tableId        String
+  table          Table       @relation(fields: [tableId], references: [id])
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id])
+  status         OrderStatus @default(OPEN)
+  createdAt      DateTime    @default(now())
+  closedAt       DateTime?
+
+  serviceEnabled Boolean     @default(true)
+  serviceRateBps Int         @default(1000)
+
+  subtotalCents  Int?
+  serviceCents   Int?
+  totalCents     Int?
+
+  paymentMethod  PaymentMethod?
+
+  items          OrderItem[]
+  printJobs      PrintJob[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  qty       Int
+  note      String?
+  sentToKitchenAt DateTime?
+  preparedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model PrintJob {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  type      String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  printedAt DateTime?
+}

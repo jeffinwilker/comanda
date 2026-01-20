@@ -1,0 +1,1333 @@
+"use client";
+import { Navbar } from "@/app/navbar";
+import { ProtectedRoute } from "@/app/protected-route";
+import { useState, useEffect } from "react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+
+type DateRange = { start: string; end: string };
+
+function formatDateInput(date: Date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getMonthRange(year: number, month: number): DateRange {
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  return { start: formatDateInput(start), end: formatDateInput(end) };
+}
+
+function getPresetRange(preset: "today" | "week" | "lastWeek" | "month" | "lastMonth"): DateRange {
+  const now = new Date();
+
+  if (preset === "today") {
+    const today = formatDateInput(now);
+    return { start: today, end: today };
+  }
+
+  if (preset === "week" || preset === "lastWeek") {
+    const current = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const day = current.getDay();
+    const diff = (day + 6) % 7;
+    const weekStart = new Date(current);
+    weekStart.setDate(current.getDate() - diff);
+    if (preset === "lastWeek") {
+      weekStart.setDate(weekStart.getDate() - 7);
+    }
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return { start: formatDateInput(weekStart), end: formatDateInput(weekEnd) };
+  }
+
+  if (preset === "lastMonth") {
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    const prevMonth = month === 0 ? 12 : month;
+    const prevYear = month === 0 ? year - 1 : year;
+    return getMonthRange(prevYear, prevMonth);
+  }
+
+  return getMonthRange(now.getFullYear(), now.getMonth() + 1);
+}
+
+function AdminDashboardContent() {
+  const [section, setSection] = useState<"home" | "products" | "tables" | "users" | "relatorios">("home");
+
+  const menuItems = [
+    { id: "relatorios", label: "Relatórios" },
+    { id: "products", label: "Produtos" },
+    { id: "tables", label: "Mesas" },
+    { id: "users", label: "Usuários" },
+  ];
+
+  return (
+    <>
+      <Navbar />
+      <main className="admin-layout">
+        <nav className="admin-sidebar">
+          <div>
+            <div className="pill" style={{ marginBottom: 12 }}>
+              Administração
+            </div>
+            <div className="muted" style={{ fontSize: "0.85rem" }}>
+              Controle geral do sistema.
+            </div>
+          </div>
+
+          <button
+            onClick={() => setSection("home")}
+            className={`nav-item ${section === "home" ? "active" : ""}`}
+          >
+            Dashboard
+          </button>
+
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id as any)}
+              className={`nav-item ${section === item.id ? "active" : ""}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="admin-content">
+          {section === "home" && <DashboardHome />}
+          {section === "relatorios" && <RelatoriosSection />}
+          {section === "products" && <ProductsSection />}
+          {section === "tables" && <TablesSection />}
+          {section === "users" && <UsersSection />}
+        </div>
+      </main>
+    </>
+  );
+}
+
+function DashboardHome() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const ordersRes = await fetch("/api/orders").catch(() => null);
+        const productsRes = await fetch("/api/products").catch(() => null);
+        const tablesRes = await fetch("/api/tables").catch(() => null);
+        const usersRes = await fetch("/api/users").catch(() => null);
+
+        const orders = ordersRes && ordersRes.ok ? await ordersRes.json() : [];
+        const products = productsRes && productsRes.ok ? await productsRes.json() : [];
+        const tables = tablesRes && tablesRes.ok ? await tablesRes.json() : [];
+        const users = usersRes && usersRes.ok ? await usersRes.json() : [];
+
+        const totalCents = Array.isArray(orders) ? orders.reduce((acc: number, o: any) => acc + (o.totalCents || 0), 0) : 0;
+        const closedOrders = Array.isArray(orders) ? orders.filter((o: any) => o.status === "CLOSED").length : 0;
+        const avgOrderValue = closedOrders > 0 ? Math.round(totalCents / closedOrders) : 0;
+
+        setStats({
+          totalOrders: Array.isArray(orders) ? orders.length : 0,
+          totalCents,
+          averageOrderValue: avgOrderValue,
+          totalProducts: Array.isArray(products) ? products.length : 0,
+          totalTables: Array.isArray(tables) ? tables.length : 0,
+          totalUsers: Array.isArray(users) ? users.length : 0,
+          closedOrders,
+        });
+      } catch (e) {
+        console.error(e);
+        setStats({
+          totalOrders: 0,
+          totalCents: 0,
+          averageOrderValue: 0,
+          totalProducts: 0,
+          totalTables: 0,
+          totalUsers: 0,
+          closedOrders: 0,
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadStats();
+  }, []);
+
+  function money(cents: number) {
+    return (cents / 100).toFixed(2).replace(".", ",");
+  }
+
+  return (
+    <div>
+      <h1 className="page-title">Dashboard administrativo</h1>
+      <p className="page-subtitle">Visão geral do desempenho.</p>
+
+      {loading ? (
+        <p className="muted">Carregando dados...</p>
+      ) : (
+        <>
+          <div className="grid grid-auto section">
+            <div className="card">
+              <div className="label">Pedidos totais</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>{stats.totalOrders}</div>
+            </div>
+            <div className="card">
+              <div className="label">Pedidos fechados</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>{stats.closedOrders}</div>
+            </div>
+            <div className="card">
+              <div className="label">Receita total</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>R$ {money(stats.totalCents)}</div>
+            </div>
+            <div className="card">
+              <div className="label">Ticket médio</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>R$ {money(stats.averageOrderValue)}</div>
+            </div>
+            <div className="card">
+              <div className="label">Produtos</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>{stats.totalProducts}</div>
+            </div>
+            <div className="card">
+              <div className="label">Mesas / Usuários</div>
+              <div style={{ fontSize: "1.8rem", fontWeight: 700 }}>
+                {stats.totalTables} / {stats.totalUsers}
+              </div>
+            </div>
+          </div>
+
+          <div className="card card-soft">
+            Selecione uma opção no menu para gerenciar os dados.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RelatoriosSection() {
+  const [tab, setTab] = useState<"resumo" | "historico" | "produtos">("resumo");
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [summaryStartDate, setSummaryStartDate] = useState(() => getMonthRange(new Date().getFullYear(), new Date().getMonth() + 1).start);
+  const [summaryEndDate, setSummaryEndDate] = useState(() => getMonthRange(new Date().getFullYear(), new Date().getMonth() + 1).end);
+
+  function money(cents: number) {
+    return (cents / 100).toFixed(2).replace(".", ",");
+  }
+
+  async function loadReport(startDate: string, endDate: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      params.append("startDate", startDate);
+      params.append("endDate", endDate);
+      const res = await fetch(`/api/reports?${params}`);
+      if (!res.ok) {
+        throw new Error("Erro ao carregar relatorio");
+      }
+      const data = await res.json();
+      setReport(data);
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || "Erro desconhecido");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadReport(summaryStartDate, summaryEndDate);
+  }, [summaryStartDate, summaryEndDate]);
+
+  function applySummaryRange(range: DateRange) {
+    const [sy, sm] = range.start.split("-").map(Number);
+    setYear(sy);
+    setMonth(sm);
+    setSummaryStartDate(range.start);
+    setSummaryEndDate(range.end);
+  }
+
+  return (
+    <div>
+      <h2 className="page-title">Relatórios de vendas</h2>
+      <div className="row section">
+        <button onClick={() => setTab("resumo")} className={`btn ${tab === "resumo" ? "btn-primary" : "btn-ghost"}`}>
+          Resumo mensal
+        </button>
+        <button onClick={() => setTab("historico")} className={`btn ${tab === "historico" ? "btn-primary" : "btn-ghost"}`}>
+          Histórico detalhado
+        </button>
+        <button onClick={() => setTab("produtos")} className={`btn ${tab === "produtos" ? "btn-primary" : "btn-ghost"}`}>
+          Produtos vendidos
+        </button>
+      </div>
+
+      {tab === "resumo" && (
+        <div>
+          <div className="grid grid-tight section">
+            <div className="field">
+              <label className="label">Mês</label>
+              <select
+                value={month}
+                onChange={(e) => {
+                  const nextMonth = parseInt(e.target.value);
+                  setMonth(nextMonth);
+                  applySummaryRange(getMonthRange(year, nextMonth));
+                }}
+                className="select"
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(year, i).toLocaleDateString("pt-BR", { month: "long" })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Ano</label>
+              <select
+                value={year}
+                onChange={(e) => {
+                  const nextYear = parseInt(e.target.value);
+                  setYear(nextYear);
+                  applySummaryRange(getMonthRange(nextYear, month));
+                }}
+                className="select"
+              >
+                {[2024, 2025, 2026].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="row section">
+            <button onClick={() => applySummaryRange(getPresetRange("today"))} className="btn btn-ghost">
+              Hoje
+            </button>
+            <button onClick={() => applySummaryRange(getPresetRange("week"))} className="btn btn-ghost">
+              Semana
+            </button>
+            <button onClick={() => applySummaryRange(getPresetRange("lastWeek"))} className="btn btn-ghost">
+              Semana passada
+            </button>
+            <button onClick={() => applySummaryRange(getPresetRange("month"))} className="btn btn-ghost">
+              Mês atual
+            </button>
+            <button onClick={() => applySummaryRange(getPresetRange("lastMonth"))} className="btn btn-ghost">
+              Mês passado
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="muted">Carregando relatórios...</p>
+          ) : error || !report ? (
+            <div className="card card-soft">{error || "Erro ao carregar dados"}</div>
+          ) : (
+            <>
+              <div className="grid grid-auto section">
+                <div className="card">
+                  <div className="label">Total de pedidos</div>
+                  <div style={{ fontSize: "1.6rem", fontWeight: 700 }}>{report.summary.totalOrders}</div>
+                </div>
+                <div className="card">
+                  <div className="label">Receita total</div>
+                  <div style={{ fontSize: "1.6rem", fontWeight: 700 }}>R$ {money(report.summary.totalCents)}</div>
+                </div>
+                <div className="card">
+                <div className="label">Ticket médio</div>
+                <div style={{ fontSize: "1.6rem", fontWeight: 700 }}>R$ {money(report.summary.averageOrderValue)}</div>
+              </div>
+            </div>
+
+            {report.salesByDay && report.salesByDay.length > 0 && (
+              <div className="chart-card section">
+                <h3>Receita diária</h3>
+                <div className="chart-area">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={report.salesByDay}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="day"
+                          tickFormatter={(value) =>
+                            new Date(value + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                          }
+                        />
+                        <YAxis />
+                        <Tooltip
+                          formatter={(value: any) => `R$ ${(value / 100).toFixed(2).replace(".", ",")}`}
+                          labelFormatter={(label) => new Date(label + "T00:00:00").toLocaleDateString("pt-BR")}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="totalCents"
+                          stroke="#db4c1e"
+                          name="Receita (R$)"
+                          dot={{ fill: "#db4c1e", r: 4 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+            {report.salesByDay && report.salesByDay.length > 0 && (
+              <div className="chart-card section">
+                <h3>Pedidos por dia</h3>
+                <div className="chart-area">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={report.salesByDay}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="day"
+                          tickFormatter={(value) =>
+                            new Date(value + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                          }
+                        />
+                        <YAxis />
+                        <Tooltip labelFormatter={(label) => new Date(label + "T00:00:00").toLocaleDateString("pt-BR")} />
+                        <Legend />
+                        <Bar dataKey="orderCount" fill="#1a7f5a" name="Quantidade de pedidos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+            <div className="card section">
+              <h3>Detalhes diários</h3>
+              <div style={{ overflowX: "auto" }}>
+                <table className="table">
+                  <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th style={{ textAlign: "right" }}>Pedidos</th>
+                        <th style={{ textAlign: "right" }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.salesByDay.map((day: any) => (
+                        <tr key={day.day}>
+                          <td>{new Date(day.day + "T00:00:00").toLocaleDateString("pt-BR")}</td>
+                          <td style={{ textAlign: "right" }}>{day.orderCount}</td>
+                          <td style={{ textAlign: "right" }}>R$ {money(day.totalCents)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "historico" && <RelatoriosHistoricoTab />}
+      {tab === "produtos" && <RelatoriosProdutosTab />}
+    </div>
+  );
+}
+
+function RelatoriosHistoricoTab() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [topItems, setTopItems] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
+      const [userId, setUserId] = useState<string>("all");
+
+  function money(cents: number) {
+    return (cents / 100).toFixed(2).replace(".", ",");
+  }
+
+  async function load(next?: { startDate?: string; endDate?: string; userId?: string }) {
+    const params = new URLSearchParams();
+    const start = next?.startDate ?? startDate;
+    const end = next?.endDate ?? endDate;
+    const waiter = next?.userId ?? userId;
+    if (start) params.append("startDate", start);
+    if (end) params.append("endDate", end);
+    if (waiter !== "all") params.append("userId", waiter);
+
+    try {
+      const res = await fetch(`/api/sales/history?${params}`);
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const data = await res.json();
+      setOrders(data.orders || []);
+      setSummary(data.summary || {});
+      setTopItems(data.topItems || []);
+    } catch (e) {
+      console.error(e);
+      setOrders([]);
+      setSummary(null);
+      setTopItems([]);
+    }
+  }
+
+  useEffect(() => {
+    fetch("/api/users")
+      .then((r) => r.json())
+      .then((data) => setUsers(data || []))
+      .catch((e) => console.error(e));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  function applyPreset(preset: "today" | "week" | "lastWeek" | "month" | "lastMonth") {
+    const range = getPresetRange(preset);
+    setStartDate(range.start);
+    setEndDate(range.end);
+    load({ startDate: range.start, endDate: range.end });
+  }
+
+  const colors = ["#db4c1e", "#1a7f5a", "#d08b1a", "#24364b", "#6b5b95", "#3f8efc"];
+
+  return (
+    <div className="section">
+      <div className="grid grid-tight section">
+        <div className="field">
+          <label className="label">Data inicial</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input" />
+        </div>
+        <div className="field">
+          <label className="label">Data final</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input" />
+        </div>
+        <div className="field">
+          <label className="label">Garçom</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="select">
+            <option value="all">Todos</option>
+            {users
+              .filter((u) => u.role === "GARCOM")
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="row section">
+        <button onClick={() => applyPreset("today")} className="btn btn-ghost">
+          Hoje
+        </button>
+        <button onClick={() => applyPreset("week")} className="btn btn-ghost">
+          Semana
+        </button>
+        <button onClick={() => applyPreset("lastWeek")} className="btn btn-ghost">
+          Semana passada
+        </button>
+        <button onClick={() => applyPreset("month")} className="btn btn-ghost">
+          Mês atual
+        </button>
+        <button onClick={() => applyPreset("lastMonth")} className="btn btn-ghost">
+          Mês passado
+        </button>
+      </div>
+
+      <button onClick={load} className="btn btn-primary">
+        Pesquisar
+      </button>
+
+      {summary && (
+        <div className="grid grid-auto section">
+          <div className="card">
+            <div className="label">Total de pedidos</div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{summary.totalOrders}</div>
+          </div>
+          <div className="card">
+            <div className="label">Faturamento</div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>R$ {money(summary.totalRevenue)}</div>
+          </div>
+          <div className="card">
+            <div className="label">Ticket médio</div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>R$ {money(summary.averageTicket)}</div>
+          </div>
+          <div className="card">
+            <div className="label">Total serviço</div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>R$ {money(summary.totalService)}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="chart-card section">
+        <h3>Itens mais vendidos</h3>
+        {topItems.length > 0 ? (
+          <div className="chart-area">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topItems}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="qty" fill="#db4c1e">
+                  {topItems.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="muted">Sem vendas neste período</p>
+        )}
+      </div>
+
+      {topItems.length > 0 && (
+        <div className="card section">
+          <h3>Produtos mais vendidos</h3>
+          <div className="stack">
+            {topItems.slice(0, 5).map((item) => (
+              <div key={item.name} className="row-between">
+                <strong>{item.name}</strong>
+                <span className="muted">{item.qty}x</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <h3>Histórico detalhado</h3>
+        {orders && orders.length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Data/Hora</th>
+                  <th>Garçom</th>
+                  <th>Mesa</th>
+                  <th>Itens</th>
+                  <th style={{ textAlign: "right" }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order: any) => (
+                  <tr key={order.id}>
+                    <td className="muted">{order.code || "-"}</td>
+                    <td>{order.closedAt ? new Date(order.closedAt).toLocaleString("pt-BR") : "-"}</td>
+                    <td>{order.user?.name || "-"}</td>
+                    <td>{order.table?.name || "-"}</td>
+                    <td>{order.items?.map((item: any) => `${item.qty}x ${item.product?.name}`).join(", ") || "-"}</td>
+                    <td style={{ textAlign: "right" }}>R$ {money(order.totalCents || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">Nenhum pedido encontrado neste período</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RelatoriosProdutosTab() {
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
+  const [items, setItems] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load(next?: { startDate?: string; endDate?: string }) {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      const start = next?.startDate ?? startDate;
+      const end = next?.endDate ?? endDate;
+      if (start) params.append("startDate", start);
+      if (end) params.append("endDate", end);
+
+      const res = await fetch(`/api/sales/history?${params}`);
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const data = await res.json();
+      setItems(data.items || []);
+      setSummary(data.summary || null);
+    } catch (e: any) {
+      console.error(e);
+      setItems([]);
+      setSummary(null);
+      setError(e?.message || "Erro ao carregar produtos");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  function applyPreset(preset: "today" | "week" | "lastWeek" | "month" | "lastMonth") {
+    const range = getPresetRange(preset);
+    setStartDate(range.start);
+    setEndDate(range.end);
+    load({ startDate: range.start, endDate: range.end });
+  }
+
+  const totalQty = items.reduce((acc: number, item: any) => acc + (item.qty || 0), 0);
+
+  return (
+    <div className="section">
+      <div className="grid grid-tight section">
+        <div className="field">
+          <label className="label">Data inicial</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input" />
+        </div>
+        <div className="field">
+          <label className="label">Data final</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input" />
+        </div>
+      </div>
+
+      <button onClick={load} className="btn btn-primary">
+        Pesquisar
+      </button>
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : error ? (
+        <div className="card card-soft">{error}</div>
+      ) : (
+        <>
+          {summary && (
+            <div className="grid grid-auto section">
+              <div className="card">
+                <div className="label">Total de pedidos</div>
+                <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{summary.totalOrders}</div>
+              </div>
+              <div className="card">
+                <div className="label">Quantidade vendida</div>
+                <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{totalQty}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <h3>Produtos vendidos</h3>
+            {items.length === 0 ? (
+              <p className="muted">Sem vendas neste período</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Produto</th>
+                      <th style={{ textAlign: "right" }}>Quantidade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => (
+                      <tr key={item.code || item.name}>
+                        <td className="muted">{item.code || "-"}</td>
+                        <td>{item.name}</td>
+                        <td style={{ textAlign: "right" }}>{item.qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProductsSection() {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ name: "", priceCents: 0, imageUrl: "" });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/products");
+      if (res.ok) {
+        setProducts(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      setImagePreview(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setImagePreview(formData.imageUrl || "");
+  }, [imageFile, formData.imageUrl]);
+
+  async function uploadImage(file: File) {
+    const data = new FormData();
+    data.append("file", file);
+    const res = await fetch("/api/products/upload", {
+      method: "POST",
+      body: data,
+    });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    const payload = await res.json();
+    return String(payload.url || "");
+  }
+
+  const handleSave = async () => {
+    if (!formData.name || formData.priceCents <= 0) {
+      alert("Preencha todos os campos corretamente");
+      return;
+    }
+
+    try {
+      const method = editingId ? "PATCH" : "POST";
+      const url = editingId ? `/api/products/${editingId}` : "/api/products";
+      let imageUrl = formData.imageUrl.trim();
+
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, imageUrl }),
+      });
+
+      if (res.ok) {
+        setShowForm(false);
+        setEditingId(null);
+        setFormData({ name: "", priceCents: 0, imageUrl: "" });
+        setImageFile(null);
+        await loadProducts();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar produto");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Tem certeza?")) return;
+
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadProducts();
+      } else {
+        alert("Erro ao deletar produto");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao deletar produto");
+    }
+  };
+
+  return (
+    <div>
+      <div className="row-between section">
+        <div>
+          <h2 className="page-title">Produtos</h2>
+          <p className="page-subtitle">Cadastre e atualize o cardápio.</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowForm(!showForm);
+            setEditingId(null);
+            setFormData({ name: "", priceCents: 0, imageUrl: "" });
+            setImageFile(null);
+          }}
+          className="btn btn-success"
+        >
+          Novo produto
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="card section stack">
+          <div className="field">
+            <label className="label">Nome do produto</label>
+            <input
+              type="text"
+              placeholder="Ex: X-burger"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Imagem (URL)</label>
+            <input
+              type="text"
+              placeholder="https://..."
+              value={formData.imageUrl}
+              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Upload de imagem</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              className="input"
+            />
+          </div>
+          {imagePreview ? (
+            <div className="row">
+              <img src={imagePreview} alt="Preview" className="image-preview" />
+            </div>
+          ) : null}
+          <div className="field">
+            <label className="label">Preço (centavos)</label>
+            <input
+              type="number"
+              placeholder="Ex: 1290"
+              value={formData.priceCents}
+              onChange={(e) => setFormData({ ...formData, priceCents: parseInt(e.target.value) || 0 })}
+              className="input"
+            />
+          </div>
+          <div className="row">
+            <button onClick={handleSave} className="btn btn-primary">
+              Salvar
+            </button>
+            <button onClick={() => setShowForm(false)} className="btn btn-ghost">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : (
+        <div className="stack">
+          {products.map((p) => (
+            <div key={p.id} className="card list-item">
+              <div className="row" style={{ flex: 1 }}>
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt={p.name} className="product-thumb" />
+                ) : (
+                  <div className="product-thumb" />
+                )}
+                <div>
+                  <strong>{p.name}</strong>
+                  {p.code ? <div className="muted">Código: {p.code}</div> : null}
+                  <div className="muted">R$ {(p.priceCents / 100).toFixed(2).replace(".", ",")}</div>
+                </div>
+              </div>
+              <div className="row">
+                <button
+                  onClick={() => {
+                    setEditingId(p.id);
+                    setFormData({ name: p.name, priceCents: p.priceCents, imageUrl: p.imageUrl || "" });
+                    setImageFile(null);
+                    setShowForm(true);
+                  }}
+                  className="btn btn-warning"
+                >
+                  Editar
+                </button>
+                <button onClick={() => handleDelete(p.id)} className="btn btn-danger">
+                  Deletar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TablesSection() {
+  const [tables, setTables] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const loadTables = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tables");
+      if (res.ok) {
+        setTables(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTables();
+  }, []);
+
+  const handleSave = async () => {
+    if (!formData.name) {
+      alert("Nome e obrigatorio");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setShowForm(false);
+        setFormData({ name: "" });
+        await loadTables();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar mesa");
+    }
+  };
+
+  return (
+    <div>
+      <div className="row-between section">
+        <div>
+          <h2 className="page-title">Mesas</h2>
+          <p className="page-subtitle">Gerencie as mesas ativas.</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowForm(!showForm);
+            setFormData({ name: "" });
+          }}
+          className="btn btn-success"
+        >
+          Nova mesa
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="card section stack">
+          <div className="field">
+            <label className="label">Nome da mesa</label>
+            <input
+              type="text"
+              placeholder="Ex: Mesa 12"
+              value={formData.name}
+              onChange={(e) => setFormData({ name: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="row">
+            <button onClick={handleSave} className="btn btn-primary">
+              Salvar
+            </button>
+            <button onClick={() => setShowForm(false)} className="btn btn-ghost">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : (
+        <div className="grid grid-five">
+          {tables.map((t) => (
+            <div key={t.id} className="card table-card stack">
+              {editingId === t.id ? (
+                <>
+                  <input
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="input"
+                  />
+                  <div className="row">
+                    <button
+                      onClick={async () => {
+                        const name = editingName.trim();
+                        if (!name) return;
+                        try {
+                          const res = await fetch(`/api/tables/${t.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name }),
+                          });
+                          if (res.ok) {
+                            setEditingId(null);
+                            setEditingName("");
+                            await loadTables();
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="btn btn-primary"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditingName("");
+                      }}
+                      className="btn btn-ghost"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <strong>{t.name}</strong>
+                  <div className="row">
+                    <button
+                      onClick={() => {
+                        setEditingId(t.id);
+                        setEditingName(t.name);
+                      }}
+                      className="btn btn-warning"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Tem certeza?")) return;
+                        try {
+                          const res = await fetch(`/api/tables/${t.id}`, { method: "DELETE" });
+                          if (res.ok) {
+                            await loadTables();
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="btn btn-danger"
+                    >
+                      Deletar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UsersSection() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "", pin: "", role: "GARCOM" });
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/users");
+      if (res.ok) {
+        setUsers(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const handleSave = async () => {
+    if (!formData.name || !formData.pin) {
+      alert("Preencha todos os campos");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setShowForm(false);
+        setFormData({ name: "", pin: "", role: "GARCOM" });
+        await loadUsers();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar usuario");
+    }
+  };
+
+  const roleLabels = { ADMIN: "Admin", GARCOM: "Garçom", COZINHA: "Cozinha", CAIXA: "Caixa" };
+
+  return (
+    <div>
+      <div className="row-between section">
+        <div>
+          <h2 className="page-title">Usuários</h2>
+          <p className="page-subtitle">Controle de acesso por função.</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowForm(!showForm);
+            setFormData({ name: "", pin: "", role: "GARCOM" });
+          }}
+          className="btn btn-success"
+        >
+          Novo usuario
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="card section stack">
+          <div className="field">
+            <label className="label">Nome</label>
+            <input
+              type="text"
+              placeholder="Nome"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">PIN (4 dígitos)</label>
+            <input
+              type="text"
+              placeholder="PIN"
+              value={formData.pin}
+              onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Perfil</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              className="select"
+            >
+              <option value="GARCOM">Garçom</option>
+              <option value="COZINHA">Cozinha</option>
+              <option value="CAIXA">Caixa</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <div className="row">
+            <button onClick={handleSave} className="btn btn-primary">
+              Salvar
+            </button>
+            <button onClick={() => setShowForm(false)} className="btn btn-ghost">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : (
+        <div className="stack">
+          {users.map((u) => (
+            <div key={u.id} className="card list-item">
+              <div>
+                <strong>{u.name}</strong>
+                <div className="muted">
+                  PIN: {u.pin} - {roleLabels[u.role as keyof typeof roleLabels]}
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm("Tem certeza?")) return;
+                  try {
+                    const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+                    if (res.ok) {
+                      await loadUsers();
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="btn btn-danger"
+              >
+                Deletar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <ProtectedRoute requiredRoles={["ADMIN"]}>
+      <AdminDashboardContent />
+    </ProtectedRoute>
+  );
+}

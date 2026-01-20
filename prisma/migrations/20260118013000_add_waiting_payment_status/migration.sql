@@ -1,0 +1,1 @@
+-- No-op for SQLite enum extension (handled by Prisma at client level)
