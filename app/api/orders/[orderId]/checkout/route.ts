@@ -16,7 +16,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
     return new Response("Pedido só pode ir para o caixa quando estiver pronto", { status: 400 });
   }
 
-  if (!order.items || order.items.length === 0) {
+  if (!order.items || order.items.filter((it) => !it.canceledAt).length === 0) {
     return new Response("Pedido sem itens", { status: 400 });
   }
 

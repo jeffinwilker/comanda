@@ -30,7 +30,9 @@ export default function PrintOrder() {
   if (loading) return <div className="page page-narrow">Carregando cupom...</div>;
   if (!order) return <div className="page page-narrow">Pedido não encontrado</div>;
 
-  const subtotal = order.items.reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
+  const subtotal = order.items
+    .filter((it: any) => !it.canceledAt)
+    .reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
   const service = order.serviceEnabled ? Math.round(subtotal * (order.serviceRateBps / 10000)) : 0;
   const total = subtotal + service;
   const money = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
@@ -96,7 +98,9 @@ export default function PrintOrder() {
         </div>
 
         <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", margin: "8px 0", padding: "8px 0" }}>
-          {order.items.map((it: any) => (
+          {order.items
+            .filter((it: any) => !it.canceledAt)
+            .map((it: any) => (
             <div key={it.id} style={{ marginBottom: 6 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                 <span>

@@ -50,3 +50,4 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ order
   await prisma.orderItem.delete({ where: { id: String(itemId) } });
   return new Response(null, { status: 204 });
 }
+

@@ -23,7 +23,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ orderI
       return new Response("Pedido não pode ser alterado", { status: 400 });
     }
     const enabled = Boolean(body.enabled);
-    const subtotalCents = order.items.reduce((acc, it) => acc + it.qty * it.product.priceCents, 0);
+    const subtotalCents = order.items
+      .filter((it) => !it.canceledAt)
+      .reduce((acc, it) => acc + it.qty * it.product.priceCents, 0);
     const { serviceCents, totalCents } = calcTotals(subtotalCents, enabled, order.serviceRateBps);
     updateData.serviceEnabled = enabled;
     updateData.subtotalCents = subtotalCents;
@@ -44,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ orderI
 
     if (body.status === "READY") {
       await tx.orderItem.updateMany({
-        where: { orderId, sentToKitchenAt: { not: null }, preparedAt: null },
+        where: { orderId, sentToKitchenAt: { not: null }, preparedAt: null, canceledAt: null },
         data: { preparedAt: new Date() },
       });
     }

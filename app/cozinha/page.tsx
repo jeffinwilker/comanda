@@ -153,7 +153,9 @@ function CozinhaPageContent() {
             <div key={order.id} className="card card-soft">
               <div className="row-between">
                 <div>
-                  <h3 style={{ margin: "0 0 4px 0" }}>Mesa {order.table.name}</h3>
+                  <h3 style={{ margin: "0 0 4px 0" }}>
+                    {order.table.name.toLowerCase().startsWith("mesa") ? order.table.name : `Mesa ${order.table.name}`}
+                  </h3>
                   <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
                     {new Date(order.createdAt).toLocaleTimeString("pt-BR")}
                   </p>

@@ -20,10 +20,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ printJobI
       }
 
       if (printJob.order.status !== "CLOSED") {
-        const subtotalCents = printJob.order.items.reduce(
-          (acc: number, it: any) => acc + it.qty * it.product.priceCents,
-          0
-        );
+        const subtotalCents = printJob.order.items
+          .filter((it: any) => !it.canceledAt)
+          .reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
         const { serviceCents, totalCents } = calcTotals(
           subtotalCents,
           printJob.order.serviceEnabled,

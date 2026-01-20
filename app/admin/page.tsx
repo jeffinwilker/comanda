@@ -65,13 +65,14 @@ function getPresetRange(preset: "today" | "week" | "lastWeek" | "month" | "lastM
 }
 
 function AdminDashboardContent() {
-  const [section, setSection] = useState<"home" | "products" | "tables" | "users" | "relatorios">("home");
+  const [section, setSection] = useState<"home" | "products" | "tables" | "users" | "relatorios" | "caixa">("home");
 
-  const menuItems = [
+    const menuItems = [
     { id: "relatorios", label: "Relatórios" },
     { id: "products", label: "Produtos" },
     { id: "tables", label: "Mesas" },
     { id: "users", label: "Usuários" },
+    { id: "caixa", label: "Caixa" },
   ];
 
   return (
@@ -112,6 +113,7 @@ function AdminDashboardContent() {
           {section === "products" && <ProductsSection />}
           {section === "tables" && <TablesSection />}
           {section === "users" && <UsersSection />}
+          {section === "caixa" && <ClosedOrdersSection />}
         </div>
       </main>
     </>
@@ -776,6 +778,156 @@ function RelatoriosProdutosTab() {
   );
 }
 
+function ClosedOrdersSection() {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/orders", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const data = await res.json();
+      const closedOrders = Array.isArray(data) ? data.filter((o: any) => o.status === "CLOSED") : [];
+      closedOrders.sort((a: any, b: any) => {
+        const aDate = a.closedAt ? new Date(a.closedAt).getTime() : 0;
+        const bDate = b.closedAt ? new Date(b.closedAt).getTime() : 0;
+        return bDate - aDate;
+      });
+      setOrders(closedOrders);
+    } catch (e: any) {
+      setOrders([]);
+      setError(e?.message || "Erro ao carregar pedidos");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  function money(cents: number) {
+    return (cents / 100).toFixed(2).replace(".", ",");
+  }
+
+  function openReceipt(orderId: string) {
+    window.open(`/print/order?orderId=${orderId}`, "_blank");
+  }
+
+  return (
+    <div>
+      <h2 className="page-title">Pedidos fechados</h2>
+      <p className="page-subtitle">Historico do caixa com acesso aos cupons.</p>
+
+      <div className="row section">
+        <button onClick={() => setView("grid")} className={`btn ${view === "grid" ? "btn-primary" : "btn-ghost"}`}>
+          Grid
+        </button>
+        <button onClick={() => setView("list")} className={`btn ${view === "list" ? "btn-primary" : "btn-ghost"}`}>
+          Lista
+        </button>
+        <button onClick={load} className="btn btn-ghost">
+          Atualizar
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="muted">Carregando pedidos...</p>
+      ) : error ? (
+        <div className="card card-soft">{error}</div>
+      ) : orders.length === 0 ? (
+        <div className="status-note">Sem pedidos fechados!</div>
+      ) : view === "grid" ? (
+        <div className="grid grid-auto section">
+          {orders.map((order) => {
+            const canceledItems = (order.items || []).filter((it: any) => it.canceledAt);
+            return (
+              <div key={order.id} className="card">
+              <div className="row-between">
+                <div>
+                  <h3 style={{ margin: 0 }}>{order.table?.name || "Mesa"}</h3>
+                  {order.code ? <div className="muted">Codigo: {order.code}</div> : null}
+                </div>
+                <span className="badge badge-success">Fechado</span>
+              </div>
+
+              <div className="card section">
+                <div className="row-between">
+                  <span>Total</span>
+                  <strong>R$ {money(order.totalCents || 0)}</strong>
+                </div>
+                <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                  {order.items?.length || 0} item(ns)
+                </div>
+                {order.closedAt && (
+                  <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                    Fechado em {new Date(order.closedAt).toLocaleString("pt-BR")}
+                  </div>
+                )}
+                {canceledItems.length > 0 ? (
+                  <div className="card card-soft" style={{ marginTop: 12 }}>
+                    <strong>Itens cancelados</strong>
+                    <div className="stack" style={{ marginTop: 8 }}>
+                      {canceledItems.map((item: any) => (
+                        <div key={item.id} className="muted">
+                          {item.qty}x {item.product?.name || "Item"}{item.canceledReason ? ` - ${item.canceledReason}` : ""}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="row">
+                <button onClick={() => openReceipt(order.id)} className="btn btn-secondary">
+                  Ver cupom
+                </button>
+                <button onClick={() => openReceipt(order.id)} className="btn btn-ghost">
+                  Baixar PDF
+                </button>
+              </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="stack section">
+          {orders.map((order) => {
+            const canceledItems = (order.items || []).filter((it: any) => it.canceledAt);
+            return (
+              <div key={order.id} className="card list-item">
+              <div>
+                <strong>{order.table?.name || "Mesa"}</strong>
+                <div className="muted">
+                  {order.code ? `Codigo ${order.code} ` : ""}
+                  {order.closedAt ? `- ${new Date(order.closedAt).toLocaleString("pt-BR")}` : ""}
+                </div>
+                <div className="muted">{order.items?.length || 0} item(ns)</div>
+                {canceledItems.length > 0 ? (
+                  <div className="muted">Cancelados: {canceledItems.length}</div>
+                ) : null}
+              </div>
+              <div className="row">
+                <strong>R$ {money(order.totalCents || 0)}</strong>
+                <button onClick={() => openReceipt(order.id)} className="btn btn-secondary">
+                  Cupom
+                </button>
+              </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductsSection() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1331,3 +1483,7 @@ export default function AdminPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+

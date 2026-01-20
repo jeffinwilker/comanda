@@ -92,6 +92,9 @@ model OrderItem {
   note      String?
   sentToKitchenAt DateTime?
   preparedAt DateTime?
+  canceledAt DateTime?
+  canceledReason String?
+  canceledBy String?
   createdAt DateTime @default(now())
 }
 

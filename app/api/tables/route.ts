@@ -27,10 +27,10 @@ export async function GET() {
         table.orders.find((order) => order.status === "WAITING_PAYMENT") ||
         table.orders.find((order) => {
           if (order.status === "READY") {
-            return order.items.some((item) => item.preparedAt);
+            return order.items.some((item) => item.preparedAt && !item.canceledAt);
           }
           if (order.status === "SENT_TO_KITCHEN") {
-            return order.items.some((item) => item.sentToKitchenAt && !item.preparedAt);
+            return order.items.some((item) => item.sentToKitchenAt && !item.preparedAt && !item.canceledAt);
           }
           return false;
         }) ||

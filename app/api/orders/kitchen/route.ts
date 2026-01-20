@@ -11,6 +11,7 @@ export async function GET() {
       include: {
         table: true,
         items: {
+          where: { canceledAt: null },
           include: { product: true },
         },
       },

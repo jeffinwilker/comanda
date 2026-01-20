@@ -19,7 +19,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
       throw new Error("Pedido só pode ser fechado quando estiver no caixa");
     }
 
-    const subtotalCents = order.items.reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
+    const subtotalCents = order.items
+      .filter((it: any) => !it.canceledAt)
+      .reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
     const { serviceCents, totalCents } = calcTotals(subtotalCents, order.serviceEnabled, order.serviceRateBps);
 
     const closed = await tx.order.update({

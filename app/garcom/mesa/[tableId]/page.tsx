@@ -6,7 +6,17 @@ import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
 
 type Product = { id: string; name: string; priceCents: number; imageUrl?: string | null };
-type OrderItem = { id: string; qty: number; note?: string | null; product: Product };
+type OrderItem = {
+  id: string;
+  qty: number;
+  note?: string | null;
+  product: Product;
+  sentToKitchenAt?: string | null;
+  preparedAt?: string | null;
+  canceledAt?: string | null;
+  canceledReason?: string | null;
+  canceledBy?: string | null;
+};
 type Order = {
   id: string;
   status: string;
@@ -30,6 +40,10 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [cancelItemId, setCancelItemId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -98,7 +112,9 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
 
   const subtotalCents = useMemo(() => {
     if (!order) return 0;
-    return order.items.reduce((acc, it) => acc + it.qty * it.product.priceCents, 0);
+    return order.items
+      .filter((it) => !it.canceledAt)
+      .reduce((acc, it) => acc + it.qty * it.product.priceCents, 0);
   }, [order]);
 
   const serviceCents = useMemo(() => {
@@ -132,18 +148,34 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
     }
   }
 
-  async function removeItem(itemId: string) {
+  function openCancelModal(itemId: string) {
+    setCancelItemId(itemId);
+    setCancelReason("");
+    setCancelError(null);
+  }
+
+  function closeCancelModal() {
+    setCancelItemId(null);
+    setCancelReason("");
+    setCancelError(null);
+    setCanceling(false);
+  }
+
+  async function cancelItem(itemId: string, reason: string) {
     if (!order) return;
     try {
+      setCanceling(true);
       const res = await fetch(`/api/orders/${order.id}/items`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId }),
+        body: JSON.stringify({ itemId, reason: reason || null, canceledBy: userId || null }),
       });
       if (!res.ok) throw new Error(await res.text());
       if (tableId) await loadOrder(tableId, true);
+      closeCancelModal();
     } catch (e: any) {
-      setToast(e.message);
+      setCancelError(e.message);
+      setCanceling(false);
     }
   }
 
@@ -163,7 +195,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   }
 
   async function sendToKitchen() {
-    if (!order || order.items.length === 0) {
+    if (!order || order.items.filter((it) => !it.canceledAt).length === 0) {
       setToast("Adicione itens antes de enviar!");
       return;
     }
@@ -178,7 +210,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   }
 
   async function requestCheckout() {
-    if (!order || order.items.length === 0) {
+    if (!order || order.items.filter((it) => !it.canceledAt).length === 0) {
       setToast("Adicione itens antes de fechar!");
       return;
     }
@@ -225,6 +257,51 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
     <>
       <Navbar />
       {toast && <div className="toast">{toast}</div>}
+      {cancelItemId && (
+        <div className="modal-backdrop" onClick={closeCancelModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Cancelar item</h3>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Informe o motivo do cancelamento.
+            </p>
+            <div className="stack">
+              <div className="row">
+                {["Lancado errado", "Cliente desistiu", "Cozinha demorou", "Pedido duplicado"].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setCancelReason(reason)}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                className="textarea"
+                rows={3}
+                placeholder="Detalhe o motivo"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+              {cancelError ? <div className="card card-soft">{cancelError}</div> : null}
+              <div className="row">
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={canceling || !cancelReason.trim()}
+                  onClick={() => cancelItem(cancelItemId, cancelReason.trim())}
+                >
+                  {canceling ? "Cancelando..." : "Confirmar cancelamento"}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={closeCancelModal}>
+                  Voltar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <main className="page page-narrow">
         <a href="/garcom" className="back-link">← Voltar para mesas</a>
         <h1 className="page-title">{displayTitle}</h1>
@@ -270,22 +347,36 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
             <p className="muted">Nenhum item adicionado.</p>
           ) : (
             <div className="stack">
-              {order.items.map((it) => (
-                <div key={it.id} className="card list-item">
-                  <div>
+              {order.items.map((it) => {
+                const isCanceled = Boolean(it.canceledAt);
+                const canCancel = !isCanceled && !it.preparedAt;
+                return (
+                  <div key={it.id} className="card list-item">
                     <div>
-                      <strong>
-                        {it.qty}x {it.product.name}
-                      </strong>
+                      <div style={{ textDecoration: isCanceled ? "line-through" : "none", opacity: isCanceled ? 0.6 : 1 }}>
+                        <strong>
+                          {it.qty}x {it.product.name}
+                        </strong>
+                      </div>
+                      {it.note && <div className="muted">Obs: {it.note}</div>}
+                      {isCanceled ? (
+                        <div className="badge badge-neutral" style={{ marginTop: 6 }}>
+                          Cancelado
+                        </div>
+                      ) : null}
+                      {isCanceled && it.canceledReason ? (
+                        <div className="muted">Motivo: {it.canceledReason}</div>
+                      ) : null}
+                      <div className="muted">R$ {money(it.qty * it.product.priceCents)}</div>
                     </div>
-                    {it.note && <div className="muted">Obs: {it.note}</div>}
-                    <div className="muted">R$ {money(it.qty * it.product.priceCents)}</div>
+                    {canCancel ? (
+                      <button onClick={() => openCancelModal(it.id)} className="btn btn-danger">
+                        Cancelar
+                      </button>
+                    ) : null}
                   </div>
-                  <button onClick={() => removeItem(it.id)} className="btn btn-danger">
-                    Remover
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -313,7 +404,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
             className="btn btn-secondary"
             disabled={
               !order ||
-              order.items.length === 0 ||
+              order.items.filter((it) => !it.canceledAt).length === 0 ||
               !["OPEN", "SENT_TO_KITCHEN", "READY"].includes(order.status)
             }
           >
@@ -322,7 +413,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
           <button
             onClick={requestCheckout}
             className="btn btn-success"
-            disabled={!order || order.items.length === 0 || order.status !== "READY"}
+            disabled={!order || order.items.filter((it) => !it.canceledAt).length === 0 || order.status !== "READY"}
           >
             Fechar pedido
           </button>
