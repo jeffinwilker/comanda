@@ -4,11 +4,18 @@ import { NextRequest, NextResponse } from "next/server";
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
   try {
     const { productId } = await params;
-    const { name, priceCents, imageUrl } = await request.json();
+    const { name, priceCents, imageUrl, categoryId, stockQty, stockMin } = await request.json();
 
     const product = await prisma.product.update({
       where: { id: productId },
-      data: { name, priceCents, imageUrl: imageUrl || null },
+      data: {
+        name,
+        priceCents,
+        imageUrl: imageUrl || null,
+        categoryId: categoryId === undefined ? undefined : categoryId ? String(categoryId) : null,
+        stockQty: Number.isFinite(stockQty) ? Math.max(0, Math.floor(Number(stockQty))) : undefined,
+        stockMin: Number.isFinite(stockMin) ? Math.max(0, Math.floor(Number(stockMin))) : undefined,
+      },
     });
 
     return NextResponse.json(product);

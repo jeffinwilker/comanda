@@ -29,6 +29,10 @@ function CozinhaPageContent() {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [tab, setTab] = useState<"pending" | "ready">("pending");
+  const [cancelTarget, setCancelTarget] = useState<{ orderId: string; itemId: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [canceling, setCanceling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const playNotificationSound = () => {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -54,6 +58,42 @@ function CozinhaPageContent() {
     playNotificationSound();
     setTimeout(() => setShowNotification(false), 4000);
   };
+
+  function openCancelModal(orderId: string, itemId: string) {
+    setCancelTarget({ orderId, itemId });
+    setCancelReason("");
+    setCancelError(null);
+  }
+
+  function closeCancelModal() {
+    setCancelTarget(null);
+    setCancelReason("");
+    setCancelError(null);
+    setCanceling(false);
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelError("Informe um motivo.");
+      return;
+    }
+    setCanceling(true);
+    try {
+      const res = await fetch(`/api/orders/${cancelTarget.orderId}/items`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: cancelTarget.itemId, reason, canceledBy: "COZINHA" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await loadOrders();
+      closeCancelModal();
+    } catch (e: any) {
+      setCancelError(e.message || "Erro ao cancelar item");
+      setCanceling(false);
+    }
+  }
 
   async function loadOrders() {
     try {
@@ -116,6 +156,46 @@ function CozinhaPageContent() {
       <Navbar />
 
       {showNotification && <div className="toast">{notificationMessage}</div>}
+      {cancelTarget && (
+        <div className="modal-backdrop" onClick={closeCancelModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Cancelar item</h3>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Informe o motivo do cancelamento.
+            </p>
+            <div className="stack">
+              <div className="row">
+                {["Sem insumo", "Erro no pedido", "Cliente desistiu", "Cozinha lotada"].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setCancelReason(reason)}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                className="textarea"
+                rows={3}
+                placeholder="Detalhe o motivo"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+              {cancelError ? <div className="card card-soft">{cancelError}</div> : null}
+              <div className="row">
+                <button type="button" className="btn btn-danger" disabled={canceling} onClick={confirmCancel}>
+                  {canceling ? "Cancelando..." : "Confirmar cancelamento"}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={closeCancelModal}>
+                  Voltar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="page">
         <h1 className="page-title">Cozinha</h1>
@@ -169,9 +249,19 @@ function CozinhaPageContent() {
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {order.items.map((item) => (
                     <li key={item.id} style={{ marginBottom: 8 }}>
-                      <strong>
-                        {item.qty}x {item.product.name}
-                      </strong>
+                      <div className="row-between">
+                        <strong>
+                          {item.qty}x {item.product.name}
+                        </strong>
+                        {tab === "pending" ? (
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => openCancelModal(order.id, item.id)}
+                          >
+                            Cancelar
+                          </button>
+                        ) : null}
+                      </div>
                       {item.note && <div className="muted">Obs: {item.note}</div>}
                     </li>
                   ))}

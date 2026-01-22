@@ -53,9 +53,21 @@ model Product {
   name       String
   priceCents Int
   imageUrl   String?
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  stockQty   Int      @default(0)
+  stockMin   Int      @default(0)
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   items      OrderItem[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  products  Product[]
 }
 
 model Order {

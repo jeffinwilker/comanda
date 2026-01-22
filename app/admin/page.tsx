@@ -65,11 +65,11 @@ function getPresetRange(preset: "today" | "week" | "lastWeek" | "month" | "lastM
 }
 
 function AdminDashboardContent() {
-  const [section, setSection] = useState<"home" | "products" | "tables" | "users" | "relatorios" | "caixa">("home");
+  const [section, setSection] = useState<"home" | "products" | "categories" | "tables" | "users" | "relatorios" | "caixa">("home");
+  const [productsMenuOpen, setProductsMenuOpen] = useState(true);
 
-    const menuItems = [
+  const menuItems = [
     { id: "relatorios", label: "Relatórios" },
-    { id: "products", label: "Produtos" },
     { id: "tables", label: "Mesas" },
     { id: "users", label: "Usuários" },
     { id: "caixa", label: "Caixa" },
@@ -96,6 +96,34 @@ function AdminDashboardContent() {
             Dashboard
           </button>
 
+          <button
+            onClick={() => {
+              setProductsMenuOpen(!productsMenuOpen);
+              if (section !== "products" && section !== "categories") {
+                setSection("products");
+              }
+            }}
+            className={`nav-item ${section === "products" || section === "categories" ? "active" : ""}`}
+          >
+            Produtos
+          </button>
+          {productsMenuOpen ? (
+            <div className="stack" style={{ gap: 8 }}>
+              <button
+                onClick={() => setSection("products")}
+                className={`nav-item nav-sub ${section === "products" ? "active" : ""}`}
+              >
+                Lista de produtos
+              </button>
+              <button
+                onClick={() => setSection("categories")}
+                className={`nav-item nav-sub ${section === "categories" ? "active" : ""}`}
+              >
+                Categorias
+              </button>
+            </div>
+          ) : null}
+
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -111,6 +139,7 @@ function AdminDashboardContent() {
           {section === "home" && <DashboardHome />}
           {section === "relatorios" && <RelatoriosSection />}
           {section === "products" && <ProductsSection />}
+          {section === "categories" && <CategoriesSection />}
           {section === "tables" && <TablesSection />}
           {section === "users" && <UsersSection />}
           {section === "caixa" && <ClosedOrdersSection />}
@@ -933,9 +962,17 @@ function ProductsSection() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: "", priceCents: 0, imageUrl: "" });
+  const [formData, setFormData] = useState({
+    name: "",
+    priceCents: 0,
+    imageUrl: "",
+    categoryId: "",
+    stockQty: 0,
+    stockMin: 0,
+  });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [categories, setCategories] = useState<any[]>([]);
 
   const loadProducts = async () => {
     setLoading(true);
@@ -953,6 +990,13 @@ function ProductsSection() {
 
   useEffect(() => {
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch((e) => console.error(e));
   }, []);
 
   useEffect(() => {
@@ -996,13 +1040,13 @@ function ProductsSection() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, imageUrl }),
+        body: JSON.stringify({ ...formData, imageUrl, categoryId: formData.categoryId || null }),
       });
 
       if (res.ok) {
         setShowForm(false);
         setEditingId(null);
-        setFormData({ name: "", priceCents: 0, imageUrl: "" });
+        setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "" });
         setImageFile(null);
         await loadProducts();
       }
@@ -1039,7 +1083,7 @@ function ProductsSection() {
           onClick={() => {
             setShowForm(!showForm);
             setEditingId(null);
-            setFormData({ name: "", priceCents: 0, imageUrl: "" });
+            setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "", stockQty: 0, stockMin: 0 });
             setImageFile(null);
           }}
           className="btn btn-success"
@@ -1059,6 +1103,21 @@ function ProductsSection() {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="input"
             />
+          </div>
+          <div className="field">
+            <label className="label">Categoria</label>
+            <select
+              value={formData.categoryId}
+              onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+              className="select"
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label className="label">Imagem (URL)</label>
@@ -1094,6 +1153,26 @@ function ProductsSection() {
               className="input"
             />
           </div>
+          <div className="grid grid-tight">
+            <div className="field">
+              <label className="label">Estoque</label>
+              <input
+                type="number"
+                value={formData.stockQty}
+                onChange={(e) => setFormData({ ...formData, stockQty: parseInt(e.target.value) || 0 })}
+                className="input"
+              />
+            </div>
+            <div className="field">
+              <label className="label">Estoque mínimo</label>
+              <input
+                type="number"
+                value={formData.stockMin}
+                onChange={(e) => setFormData({ ...formData, stockMin: parseInt(e.target.value) || 0 })}
+                className="input"
+              />
+            </div>
+          </div>
           <div className="row">
             <button onClick={handleSave} className="btn btn-primary">
               Salvar
@@ -1109,36 +1188,323 @@ function ProductsSection() {
         <p className="muted">Carregando...</p>
       ) : (
         <div className="stack">
-          {products.map((p) => (
-            <div key={p.id} className="card list-item">
-              <div className="row" style={{ flex: 1 }}>
-                {p.imageUrl ? (
-                  <img src={p.imageUrl} alt={p.name} className="product-thumb" />
-                ) : (
-                  <div className="product-thumb" />
-                )}
-                <div>
-                  <strong>{p.name}</strong>
-                  {p.code ? <div className="muted">Código: {p.code}</div> : null}
-                  <div className="muted">R$ {(p.priceCents / 100).toFixed(2).replace(".", ",")}</div>
+          {products.map((p) =>
+            editingId === p.id ? (
+              <div key={p.id} className="card stack">
+                <div className="field">
+                  <label className="label">Nome do produto</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="input"
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Categoria</label>
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    className="select"
+                  >
+                    <option value="">Sem categoria</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="label">Imagem (URL)</label>
+                  <input
+                    type="text"
+                    value={formData.imageUrl}
+                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                    className="input"
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Upload de imagem</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    className="input"
+                  />
+                </div>
+                {imagePreview ? (
+                  <div className="row">
+                    <img src={imagePreview} alt="Preview" className="image-preview" />
+                  </div>
+                ) : null}
+                <div className="field">
+                  <label className="label">Preço (centavos)</label>
+                  <input
+                    type="number"
+                    value={formData.priceCents}
+                    onChange={(e) => setFormData({ ...formData, priceCents: parseInt(e.target.value) || 0 })}
+                    className="input"
+                  />
+                </div>
+                <div className="grid grid-tight">
+                  <div className="field">
+                    <label className="label">Estoque</label>
+                    <input
+                      type="number"
+                      value={formData.stockQty}
+                      onChange={(e) => setFormData({ ...formData, stockQty: parseInt(e.target.value) || 0 })}
+                      className="input"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label">Estoque mínimo</label>
+                    <input
+                      type="number"
+                      value={formData.stockMin}
+                      onChange={(e) => setFormData({ ...formData, stockMin: parseInt(e.target.value) || 0 })}
+                      className="input"
+                    />
+                  </div>
+                </div>
+                <div className="row">
+                  <button onClick={handleSave} className="btn btn-primary">
+                    Salvar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingId(null);
+        setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "", stockQty: 0, stockMin: 0 });
+                      setImageFile(null);
+                      setShowForm(false);
+                    }}
+                    className="btn btn-ghost"
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </div>
-              <div className="row">
-                <button
+            ) : (
+              <div key={p.id} className="card list-item">
+                <div className="row" style={{ flex: 1 }}>
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt={p.name} className="product-thumb" />
+                  ) : (
+                    <div className="product-thumb" />
+                  )}
+                  <div>
+                    <strong>{p.name}</strong>
+                    {p.code ? <div className="muted">Código: {p.code}</div> : null}
+                    {p.category?.name ? <div className="muted">Categoria: {p.category.name}</div> : null}
+                    <div className="muted">R$ {(p.priceCents / 100).toFixed(2).replace(".", ",")}</div>
+                    <div className="muted">Estoque: {p.stockQty ?? 0} (mín: {p.stockMin ?? 0})</div>
+                  </div>
+                </div>
+                <div className="row">
+                  <button
                   onClick={() => {
                     setEditingId(p.id);
-                    setFormData({ name: p.name, priceCents: p.priceCents, imageUrl: p.imageUrl || "" });
+                    setFormData({
+                      name: p.name,
+                      priceCents: p.priceCents,
+                      imageUrl: p.imageUrl || "",
+                      categoryId: p.categoryId || "",
+                      stockQty: p.stockQty || 0,
+                      stockMin: p.stockMin || 0,
+                    });
                     setImageFile(null);
-                    setShowForm(true);
+                    setShowForm(false);
                   }}
-                  className="btn btn-warning"
-                >
-                  Editar
-                </button>
-                <button onClick={() => handleDelete(p.id)} className="btn btn-danger">
-                  Deletar
-                </button>
+                    className="btn btn-warning"
+                  >
+                    Editar
+                  </button>
+                  <button onClick={() => handleDelete(p.id)} className="btn btn-danger">
+                    Deletar
+                  </button>
+                </div>
               </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoriesSection() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const loadCategories = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/categories");
+      if (res.ok) {
+        const data = await res.json();
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a, b) =>
+              String(a.name).localeCompare(String(b.name), "pt-BR", { numeric: true, sensitivity: "base" })
+            )
+          : data;
+        setCategories(sorted);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const handleSave = async () => {
+    if (!formData.name.trim()) {
+      alert("Nome e obrigatorio");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: formData.name.trim() }),
+      });
+
+      if (res.ok) {
+        setShowForm(false);
+        setFormData({ name: "" });
+        await loadCategories();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar categoria");
+    }
+  };
+
+  return (
+    <div>
+      <div className="row-between section">
+        <div>
+          <h2 className="page-title">Categorias</h2>
+          <p className="page-subtitle">Organize os produtos por tipo.</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowForm(!showForm);
+            setFormData({ name: "" });
+          }}
+          className="btn btn-success"
+        >
+          Nova categoria
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="card section stack">
+          <div className="field">
+            <label className="label">Nome da categoria</label>
+            <input
+              type="text"
+              placeholder="Ex: Bebidas"
+              value={formData.name}
+              onChange={(e) => setFormData({ name: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="row">
+            <button onClick={handleSave} className="btn btn-primary">
+              Salvar
+            </button>
+            <button onClick={() => setShowForm(false)} className="btn btn-ghost">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : (
+        <div className="grid grid-five">
+          {categories.map((c) => (
+            <div key={c.id} className="card table-card stack">
+              {editingId === c.id ? (
+                <>
+                  <input value={editingName} onChange={(e) => setEditingName(e.target.value)} className="input" />
+                  <div className="row">
+                    <button
+                      onClick={async () => {
+                        const name = editingName.trim();
+                        if (!name) return;
+                        try {
+                          const res = await fetch(`/api/categories/${c.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name }),
+                          });
+                          if (res.ok) {
+                            setEditingId(null);
+                            setEditingName("");
+                            await loadCategories();
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="btn btn-primary"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditingName("");
+                      }}
+                      className="btn btn-ghost"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <strong>{c.name}</strong>
+                  <div className="row">
+                    <button
+                      onClick={() => {
+                        setEditingId(c.id);
+                        setEditingName(c.name);
+                      }}
+                      className="btn btn-warning"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Tem certeza?")) return;
+                        try {
+                          const res = await fetch(`/api/categories/${c.id}`, { method: "DELETE" });
+                          if (res.ok) {
+                            await loadCategories();
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="btn btn-danger"
+                    >
+                      Deletar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -1160,7 +1526,13 @@ function TablesSection() {
     try {
       const res = await fetch("/api/tables");
       if (res.ok) {
-        setTables(await res.json());
+        const data = await res.json();
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a, b) =>
+              String(a.name).localeCompare(String(b.name), "pt-BR", { numeric: true, sensitivity: "base" })
+            )
+          : data;
+        setTables(sorted);
       }
     } catch (e) {
       console.error(e);

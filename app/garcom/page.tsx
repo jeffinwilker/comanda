@@ -28,7 +28,12 @@ function GarcomPageContent() {
         const res = await fetch("/api/tables", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          setTables(data);
+          const sorted = Array.isArray(data)
+            ? [...data].sort((a, b) =>
+                String(a.name).localeCompare(String(b.name), "pt-BR", { numeric: true, sensitivity: "base" })
+              )
+            : data;
+          setTables(sorted);
         }
       } catch (e) {
         console.error(e);

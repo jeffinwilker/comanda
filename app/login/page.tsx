@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <div className="login-card">
-        <h1 className="login-title">Comanda</h1>
+        <img src="/logo.png" alt="Espetinho do Jardim" className="login-logo" />
         <p className="page-subtitle">Controle rápido de mesas, pedidos e caixa.</p>
 
         <form onSubmit={handleLogin} className="stack">

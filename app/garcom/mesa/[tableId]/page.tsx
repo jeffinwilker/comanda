@@ -5,7 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
 
-type Product = { id: string; name: string; priceCents: number; imageUrl?: string | null };
+type Product = {
+  id: string;
+  name: string;
+  priceCents: number;
+  imageUrl?: string | null;
+  categoryId?: string | null;
+  category?: { id: string; name: string } | null;
+};
 type OrderItem = {
   id: string;
   qty: number;
@@ -33,6 +40,8 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   const [order, setOrder] = useState<Order | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [productId, setProductId] = useState("");
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryId, setCategoryId] = useState("all");
   const [qty, setQty] = useState("1");
   const [note, setNote] = useState("");
   const [tableId, setTableId] = useState<string | null>(null);
@@ -78,14 +87,22 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
     }
   }
 
-  async function loadProducts() {
+  async function loadProducts(selectedCategoryId?: string) {
     setLoadingProducts(true);
     try {
-      const res = await fetch("/api/products", { cache: "no-store" });
+      const filter = selectedCategoryId ?? categoryId;
+      const params = new URLSearchParams();
+      params.set("available", "1");
+      if (filter && filter !== "all") {
+        params.set("categoryId", filter);
+      }
+      const res = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Erro ao carregar produtos");
       const data = await res.json();
       setProducts(data);
-      if (data.length && !productId) setProductId(data[0].id);
+      if (data.length && (!productId || !data.some((p: Product) => p.id === productId))) {
+        setProductId(data[0].id);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -110,6 +127,13 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
     resolveParams();
   }, [params]);
 
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch((e) => console.error(e));
+  }, []);
+
   const subtotalCents = useMemo(() => {
     if (!order) return 0;
     return order.items
@@ -124,6 +148,10 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   }, [order, subtotalCents]);
 
   const totalCents = subtotalCents + serviceCents;
+  const hasPendingKitchen = useMemo(() => {
+    if (!order) return false;
+    return order.items.some((it) => it.sentToKitchenAt && !it.preparedAt && !it.canceledAt);
+  }, [order]);
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
@@ -310,6 +338,25 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
 
         <form onSubmit={addItem} className="card stack">
           <div className="field">
+            <label className="label">Categoria</label>
+            <select
+              value={categoryId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCategoryId(next);
+                loadProducts(next);
+              }}
+              className="select"
+            >
+              <option value="all">Todas</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <label className="label">Produto</label>
             <select value={productId} onChange={(e) => setProductId(e.target.value)} className="select">
               {products.map((p) => (
@@ -364,7 +411,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
                           Cancelado
                         </div>
                       ) : null}
-                      {isCanceled && it.canceledReason ? (
+                      {isCanceled && it.canceledReason && it.canceledBy !== "COZINHA" ? (
                         <div className="muted">Motivo: {it.canceledReason}</div>
                       ) : null}
                       <div className="muted">R$ {money(it.qty * it.product.priceCents)}</div>
@@ -413,7 +460,11 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
           <button
             onClick={requestCheckout}
             className="btn btn-success"
-            disabled={!order || order.items.filter((it) => !it.canceledAt).length === 0 || order.status !== "READY"}
+            disabled={
+              !order ||
+              order.items.filter((it) => !it.canceledAt).length === 0 ||
+              hasPendingKitchen
+            }
           >
             Fechar pedido
           </button>

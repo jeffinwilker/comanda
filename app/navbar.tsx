@@ -17,7 +17,7 @@ export function Navbar() {
   return (
     <nav className="nav">
       <div className="nav-brand">
-        <span className="pill">Comanda</span>
+        <img src="/logo.png" alt="Espetinho do Jardim" className="nav-logo" />
       </div>
       <div className="nav-actions">
         <span className="nav-user">Olá, {user.name}</span>

@@ -12,12 +12,18 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
     return new Response("Pedido não encontrado", { status: 404 });
   }
 
-  if (order.status !== "READY") {
-    return new Response("Pedido só pode ir para o caixa quando estiver pronto", { status: 400 });
+  
+  if (order.status === "CLOSED" || order.status === "CANCELED") {
+    return new Response("Pedido j� foi finalizado", { status: 400 });
+  }
+  const activeItems = (order.items || []).filter((it) => !it.canceledAt);
+  if (activeItems.length === 0) {
+    return new Response("Pedido sem itens", { status: 400 });
   }
 
-  if (!order.items || order.items.filter((it) => !it.canceledAt).length === 0) {
-    return new Response("Pedido sem itens", { status: 400 });
+  const hasPendingKitchen = activeItems.some((it) => it.sentToKitchenAt && !it.preparedAt);
+  if (hasPendingKitchen) {
+    return new Response("Pedido só pode ir para o caixa após a cozinha finalizar", { status: 400 });
   }
 
   const existing = await prisma.printJob.findFirst({
@@ -51,3 +57,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
 
   return Response.json(printJob);
 }
+
+
+
+

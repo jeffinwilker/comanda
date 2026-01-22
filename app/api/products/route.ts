@@ -1,9 +1,18 @@
 import { prisma } from "../../../lib/prisma";
 import { generateUniqueCode } from "@/lib/codes";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const categoryId = searchParams.get("categoryId");
+  const onlyAvailable = searchParams.get("available") === "1";
+
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      categoryId: categoryId ? String(categoryId) : undefined,
+      stockQty: onlyAvailable ? { gt: 0 } : undefined,
+    },
+    include: { category: true },
     orderBy: { name: "asc" },
   });
   return Response.json(products);
@@ -15,6 +24,9 @@ export async function POST(req: Request) {
   const rawPriceCents = body?.priceCents;
   const rawPrice = body?.price;
   const imageUrl = String(body?.imageUrl || "").trim();
+  const categoryId = body?.categoryId ? String(body.categoryId) : null;
+  const stockQty = Number.isFinite(body?.stockQty) ? Math.max(0, Math.floor(Number(body.stockQty))) : 0;
+  const stockMin = Number.isFinite(body?.stockMin) ? Math.max(0, Math.floor(Number(body.stockMin))) : 0;
 
   let priceCents: number | null = null;
   if (Number.isFinite(rawPriceCents)) {
@@ -32,7 +44,16 @@ export async function POST(req: Request) {
 
   const code = await generateUniqueCode("product");
   const product = await prisma.product.create({
-    data: { name, code, priceCents, imageUrl: imageUrl || null, isActive: true },
+    data: {
+      name,
+      code,
+      priceCents,
+      imageUrl: imageUrl || null,
+      categoryId: categoryId || null,
+      stockQty,
+      stockMin,
+      isActive: true,
+    },
   });
 
   return Response.json(product);

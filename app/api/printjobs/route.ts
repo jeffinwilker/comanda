@@ -41,10 +41,24 @@ export async function POST(_: Request, { params }: { params: { orderId: string }
       throw new Error("Pedido não pode ser fechado no status atual");
     }
 
-    const subtotalCents = order.items
-      .filter((it: any) => !it.canceledAt)
-      .reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
+    const activeItems = order.items.filter((it: any) => !it.canceledAt);
+    const subtotalCents = activeItems.reduce((acc: number, it: any) => acc + it.qty * it.product.priceCents, 0);
     const { serviceCents, totalCents } = calcTotals(subtotalCents, order.serviceEnabled, order.serviceRateBps);
+
+    const qtyByProduct = new Map<string, number>();
+    activeItems.forEach((it: any) => {
+      qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) || 0) + it.qty);
+    });
+
+    for (const [productId, qty] of qtyByProduct.entries()) {
+      const updated = await tx.product.updateMany({
+        where: { id: productId, stockQty: { gte: qty } },
+        data: { stockQty: { decrement: qty } },
+      });
+      if (updated.count === 0) {
+        throw new Error("Estoque insuficiente para finalizar o pedido");
+      }
+    }
 
     const closed = await tx.order.update({
       where: { id: orderId },

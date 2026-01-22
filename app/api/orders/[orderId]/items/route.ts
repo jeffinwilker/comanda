@@ -15,6 +15,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
     return new Response("Pedido não está aberto para alterações", { status: 400 });
   }
 
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product || !product.isActive) {
+    return new Response("Produto indisponível", { status: 400 });
+  }
+  if (product.stockQty <= 0) {
+    return new Response("Produto sem estoque", { status: 400 });
+  }
+  if (product.stockQty < q) {
+    return new Response("Estoque insuficiente para a quantidade", { status: 400 });
+  }
+
   const item = await prisma.orderItem.create({
     data: {
       orderId,
@@ -31,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
-  const { itemId } = await req.json();
+  const { itemId, reason, canceledBy } = await req.json();
 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return new Response("Pedido não encontrado", { status: 400 });
@@ -43,11 +54,20 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ order
   if (!item || item.orderId !== orderId) {
     return new Response("Item não encontrado", { status: 404 });
   }
-  if (item.sentToKitchenAt) {
-    return new Response("Item já foi enviado para a cozinha", { status: 400 });
+  if (item.canceledAt) {
+    return new Response("Item já foi cancelado", { status: 400 });
+  }
+  if (item.preparedAt) {
+    return new Response("Item já foi preparado", { status: 400 });
   }
 
-  await prisma.orderItem.delete({ where: { id: String(itemId) } });
+  await prisma.orderItem.update({
+    where: { id: String(itemId) },
+    data: {
+      canceledAt: new Date(),
+      canceledReason: reason ? String(reason).slice(0, 280) : null,
+      canceledBy: canceledBy ? String(canceledBy).slice(0, 120) : null,
+    },
+  });
   return new Response(null, { status: 204 });
 }
-
