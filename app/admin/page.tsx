@@ -1181,7 +1181,14 @@ function ProductsSection() {
       }
       setShowForm(false);
       setEditingId(null);
-      setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "" });
+      setFormData({
+        name: "",
+        priceCents: 0,
+        imageUrl: "",
+        categoryId: "",
+        stockQty: 0,
+        stockMin: 0,
+      });
       setImageFile(null);
       await loadProducts();
     } catch (e) {
