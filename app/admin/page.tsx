@@ -719,7 +719,7 @@ function RelatoriosHistoricoTab() {
         </button>
       </div>
 
-      <button onClick={load} className="btn btn-primary">
+      <button onClick={() => load()} className="btn btn-primary">
         Pesquisar
       </button>
 
@@ -883,7 +883,7 @@ function RelatoriosProdutosTab() {
         </div>
       </div>
 
-      <button onClick={load} className="btn btn-primary">
+      <button onClick={() => load()} className="btn btn-primary">
         Pesquisar
       </button>
 
@@ -993,7 +993,7 @@ function ClosedOrdersSection() {
         <button onClick={() => setView("list")} className={`btn ${view === "list" ? "btn-primary" : "btn-ghost"}`}>
           Lista
         </button>
-        <button onClick={load} className="btn btn-ghost">
+        <button onClick={() => load()} className="btn btn-ghost">
           Atualizar
         </button>
       </div>
