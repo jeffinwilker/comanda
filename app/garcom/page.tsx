@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/app/auth-context";
 import { Navbar } from "@/app/navbar";
@@ -12,7 +12,7 @@ interface Table {
 }
 
 function GarcomPageContent() {
-  const { user } = useAuth();
+  const { user, getCompanyHeaders } = useAuth();
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const statusLabels: Record<string, { label: string; className: string }> = {
@@ -25,7 +25,10 @@ function GarcomPageContent() {
   useEffect(() => {
     async function loadTables() {
       try {
-        const res = await fetch("/api/tables", { cache: "no-store" });
+        const res = await fetch("/api/tables", {
+          cache: "no-store",
+          headers: getCompanyHeaders(),
+        });
         if (res.ok) {
           const data = await res.json();
           const sorted = Array.isArray(data)
@@ -44,7 +47,7 @@ function GarcomPageContent() {
     loadTables();
     const id = setInterval(loadTables, 4000);
     return () => clearInterval(id);
-  }, []);
+  }, [getCompanyHeaders]);
 
   if (loading) {
     return (

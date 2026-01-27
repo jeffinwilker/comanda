@@ -1,17 +1,25 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ tableId: string }> }) {
   try {
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
+
     const { tableId } = await params;
     const body = await request.json();
     const name = String(body?.name || "").trim();
 
     if (!name) {
-      return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
+      return NextResponse.json({ error: "Nome e obrigatorio" }, { status: 400 });
     }
 
-    const table = await prisma.table.update({
+    const existing = await ctx.tenant.table.findUnique({ where: { id: tableId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Mesa nao encontrada" }, { status: 404 });
+    }
+
+    const table = await ctx.tenant.table.update({
       where: { id: tableId },
       data: { name },
     });
@@ -25,9 +33,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ tableId: string }> }) {
   try {
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
+
     const { tableId } = await params;
 
-    await prisma.table.delete({
+    const existing = await ctx.tenant.table.findUnique({ where: { id: tableId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Mesa nao encontrada" }, { status: 404 });
+    }
+
+    await ctx.tenant.table.delete({
       where: { id: tableId },
     });
 

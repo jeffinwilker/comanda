@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateBps: number) {
   const serviceCents = serviceEnabled ? Math.round(subtotalCents * (serviceRateBps / 10000)) : 0;
@@ -6,10 +6,18 @@ function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateB
 }
 
 export async function GET(req: Request) {
+  const ctx = await getTenantContext(req);
+  if (!ctx) {
+    return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const { searchParams } = new URL(req.url);
   const status = (searchParams.get("status") || "PENDING").toUpperCase();
 
-  const jobs = await prisma.printJob.findMany({
+  const jobs = await ctx.tenant.printJob.findMany({
     where: { status },
     include: {
       order: {
@@ -27,18 +35,26 @@ export async function GET(req: Request) {
   return Response.json(jobs);
 }
 
-export async function POST(_: Request, { params }: { params: { orderId: string } }) {
+export async function POST(req: Request, { params }: { params: { orderId: string } }) {
+  const ctx = await getTenantContext(req);
+  if (!ctx) {
+    return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const { orderId } = params;
 
-  const result = await prisma.$transaction(async (tx: any) => {
+  const result = await ctx.tenant.$transaction(async (tx: any) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
       include: { items: { include: { product: true } } },
     });
 
-    if (!order) throw new Error("Pedido não encontrado");
+    if (!order) throw new Error("Pedido nao encontrado");
     if (order.status !== "WAITING_PAYMENT") {
-      throw new Error("Pedido não pode ser fechado no status atual");
+      throw new Error("Pedido nao pode ser fechado no status atual");
     }
 
     const activeItems = order.items.filter((it: any) => !it.canceledAt);

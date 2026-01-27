@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 
 type Product = {
   id: string;
@@ -31,9 +32,11 @@ type Order = {
   serviceRateBps: number;
   items: OrderItem[];
   table?: { name: string };
+  code?: string | null;
 };
 
 function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { tableId: string } }) {
+  const { getCompanyHeaders } = useAuth();
   const searchParams = useSearchParams();
   const userId = searchParams.get("userId");
 
@@ -53,6 +56,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -73,7 +77,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       if (!tid) throw new Error("tableId não foi fornecido");
       const res = await fetch("/api/orders/open", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ tableId: tid, userId: userId || undefined }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -96,7 +100,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       if (filter && filter !== "all") {
         params.set("categoryId", filter);
       }
-      const res = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/products?${params.toString()}`, { cache: "no-store", headers: getCompanyHeaders() });
       if (!res.ok) throw new Error("Erro ao carregar produtos");
       const data = await res.json();
       setProducts(data);
@@ -128,11 +132,11 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   }, [params]);
 
   useEffect(() => {
-    fetch("/api/categories")
+    fetch("/api/categories", { headers: getCompanyHeaders() })
       .then((r) => r.json())
       .then((data) => setCategories(Array.isArray(data) ? data : []))
       .catch((e) => console.error(e));
-  }, []);
+  }, [getCompanyHeaders]);
 
   const subtotalCents = useMemo(() => {
     if (!order) return 0;
@@ -162,17 +166,22 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       return;
     }
     try {
+      setAddingItem(true);
       const res = await fetch(`/api/orders/${order.id}/items`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ productId, qty: q, note: note.trim() || null }),
       });
       if (!res.ok) throw new Error(await res.text());
       setQty("1");
       setNote("");
       if (tableId) await loadOrder(tableId, true);
+      const productName = products.find((p) => p.id === productId)?.name;
+      setToast(productName ? `${productName} adicionado!` : "Item adicionado!");
     } catch (e: any) {
       setToast(e.message);
+    } finally {
+      setAddingItem(false);
     }
   }
 
@@ -195,7 +204,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       setCanceling(true);
       const res = await fetch(`/api/orders/${order.id}/items`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ itemId, reason: reason || null, canceledBy: userId || null }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -209,15 +218,18 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
 
   async function toggleService() {
     if (!order) return;
+    const nextEnabled = !order.serviceEnabled;
+    const prevOrder = order;
+    setOrder({ ...order, serviceEnabled: nextEnabled });
     try {
       const res = await fetch(`/api/orders/${order.id}/service`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !order.serviceEnabled }),
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ enabled: nextEnabled }),
       });
       if (!res.ok) throw new Error(await res.text());
-      if (tableId) await loadOrder(tableId, true);
     } catch (e: any) {
+      setOrder(prevOrder);
       setToast(e.message);
     }
   }
@@ -228,7 +240,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       return;
     }
     try {
-      const res = await fetch(`/api/orders/${order.id}/kitchen`, { method: "POST" });
+      const res = await fetch(`/api/orders/${order.id}/kitchen`, { method: "POST", headers: getCompanyHeaders() });
       if (!res.ok) throw new Error(await res.text());
       if (tableId) await loadOrder(tableId, true);
       setToast("Pedido enviado para a cozinha!");
@@ -243,7 +255,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
       return;
     }
     try {
-      const res = await fetch(`/api/orders/${order.id}/checkout`, { method: "POST" });
+      const res = await fetch(`/api/orders/${order.id}/checkout`, { method: "POST", headers: getCompanyHeaders() });
       if (!res.ok) throw new Error(await res.text());
       setToast("Pedido enviado para o caixa!");
       window.location.href = "/garcom";
@@ -284,7 +296,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
   return (
     <>
       <Navbar />
-      {toast && <div className="toast">{toast}</div>}
+        {toast && <div className="toast toast-center">{toast}</div>}
       {cancelItemId && (
         <div className="modal-backdrop" onClick={closeCancelModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -294,7 +306,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
             </p>
             <div className="stack">
               <div className="row">
-                {["Lancado errado", "Cliente desistiu", "Cozinha demorou", "Pedido duplicado"].map((reason) => (
+                {["Lançado errado", "Cliente desistiu", "Cozinha demorou", "Pedido duplicado"].map((reason) => (
                   <button
                     key={reason}
                     type="button"
@@ -331,7 +343,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
         </div>
       )}
       <main className="page page-narrow">
-        <a href="/garcom" className="back-link">← Voltar para mesas</a>
+        <a href="/garcom" className="back-link">&lt;- Voltar para mesas</a>
         <h1 className="page-title">{displayTitle}</h1>
         {order?.code ? <div className="muted">Código do pedido: {order.code}</div> : null}
         <p className="page-subtitle">Envie para a cozinha e feche quando estiver pronto.</p>
@@ -376,7 +388,9 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
               <input value={note} onChange={(e) => setNote(e.target.value)} className="input" />
             </div>
           </div>
-          <button className="btn btn-success">Adicionar item</button>
+          <button className="btn btn-success" disabled={addingItem}>
+            {addingItem ? "Adicionando..." : "Adicionar item"}
+          </button>
         </form>
 
         <div className="card section">
@@ -460,11 +474,7 @@ function MesaPageContent({ params }: { params: Promise<{ tableId: string }> | { 
           <button
             onClick={requestCheckout}
             className="btn btn-success"
-            disabled={
-              !order ||
-              order.items.filter((it) => !it.canceledAt).length === 0 ||
-              hasPendingKitchen
-            }
+            disabled={!order || order.items.filter((it) => !it.canceledAt).length === 0 || hasPendingKitchen}
           >
             Fechar pedido
           </button>

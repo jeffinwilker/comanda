@@ -1,22 +1,25 @@
-import { prisma } from "../../../../../lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateBps: number) {
   const serviceCents = serviceEnabled ? Math.round(subtotalCents * (serviceRateBps / 10000)) : 0;
   return { serviceCents, totalCents: subtotalCents + serviceCents };
 }
 
-export async function POST(_: Request, { params }: { params: Promise<{ printJobId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ printJobId: string }> }) {
   try {
+    const ctx = await getTenantContext(req);
+    if (!ctx) return new Response("Empresa nao definida", { status: 400 });
+
     const { printJobId } = await params;
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await ctx.tenant.$transaction(async (tx: any) => {
       const printJob = await tx.printJob.findUnique({
         where: { id: printJobId },
         include: { order: { include: { items: { include: { product: true } } } } },
       });
 
       if (!printJob || !printJob.order) {
-        throw new Error("Print job não encontrado");
+        throw new Error("Print job nao encontrado");
       }
 
       if (printJob.order.status !== "CLOSED") {
@@ -79,3 +82,4 @@ export async function POST(_: Request, { params }: { params: Promise<{ printJobI
     return new Response(error?.message || "Erro ao fechar pedido", { status: 500 });
   }
 }
+

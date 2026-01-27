@@ -17,7 +17,7 @@ function UsuariosRedirect() {
       <Navbar />
       <main className="page page-narrow">
         <h1 className="page-title">Redirecionando</h1>
-        <p className="page-subtitle">Abrindo painel de administração.</p>
+        <p className="page-subtitle">Abrindo painel de administraÃ§Ã£o.</p>
       </main>
     </>
   );
@@ -30,3 +30,4 @@ export default function AdminUsuariosPage() {
     </ProtectedRoute>
   );
 }
+

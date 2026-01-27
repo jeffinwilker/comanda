@@ -1,11 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { useAuth } from "@/app/auth-context";
 
 export default function PrintOrder() {
+  const { getCompanyHeaders } = useAuth();
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
   const [order, setOrder] = useState<any>(null);
@@ -15,7 +17,7 @@ export default function PrintOrder() {
     async function load() {
       if (!orderId) return;
       try {
-        const res = await fetch(`/api/orders/${orderId}`);
+        const res = await fetch(`/api/orders/${orderId}`, { headers: getCompanyHeaders() });
         const data = await res.json();
         setOrder(data);
       } catch (error) {
@@ -25,7 +27,7 @@ export default function PrintOrder() {
       }
     }
     load();
-  }, [orderId]);
+  }, [orderId, getCompanyHeaders]);
 
   if (loading) return <div className="page page-narrow">Carregando...</div>;
   if (!order) return <div className="page page-narrow">Pedido não encontrado</div>;
@@ -101,16 +103,16 @@ export default function PrintOrder() {
           {order.items
             .filter((it: any) => !it.canceledAt)
             .map((it: any) => (
-            <div key={it.id} style={{ marginBottom: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                <span>
-                  {it.qty}x {it.product.name}
-                </span>
-                <span>R$ {money(it.qty * it.product.priceCents)}</span>
+              <div key={it.id} style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                  <span>
+                    {it.qty}x {it.product.name}
+                  </span>
+                  <span>R$ {money(it.qty * it.product.priceCents)}</span>
+                </div>
+                {it.note ? <div style={{ fontSize: "11px", color: "#666" }}>{it.note}</div> : null}
               </div>
-              {it.note ? <div style={{ fontSize: "11px", color: "#666" }}>{it.note}</div> : null}
-            </div>
-          ))}
+            ))}
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>

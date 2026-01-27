@@ -1,22 +1,25 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateBps: number) {
   const serviceCents = serviceEnabled ? Math.round(subtotalCents * (serviceRateBps / 10000)) : 0;
   return { serviceCents, totalCents: subtotalCents + serviceCents };
 }
 
-export async function POST(_: Request, { params }: { params: Promise<{ orderId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const ctx = await getTenantContext(req);
+  if (!ctx) return new Response("Empresa nao definida", { status: 400 });
+
   const { orderId } = await params;
 
-  const result = await prisma.$transaction(async (tx: any) => {
+  const result = await ctx.tenant.$transaction(async (tx: any) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
       include: { items: { include: { product: true } } },
     });
 
-    if (!order) throw new Error("Pedido não encontrado");
+    if (!order) throw new Error("Pedido nao encontrado");
     if (order.status !== "WAITING_PAYMENT") {
-      throw new Error("Pedido só pode ser fechado quando estiver no caixa");
+      throw new Error("Pedido so pode ser fechado quando estiver no caixa");
     }
 
     const activeItems = order.items.filter((it: any) => !it.canceledAt);

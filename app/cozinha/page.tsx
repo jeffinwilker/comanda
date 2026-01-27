@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 
 interface OrderItem {
   id: string;
@@ -23,6 +24,7 @@ interface KitchenOrder {
 }
 
 function CozinhaPageContent() {
+  const { getCompanyHeaders } = useAuth();
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastOrderCount, setLastOrderCount] = useState(0);
@@ -83,7 +85,7 @@ function CozinhaPageContent() {
     try {
       const res = await fetch(`/api/orders/${cancelTarget.orderId}/items`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ itemId: cancelTarget.itemId, reason, canceledBy: "COZINHA" }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -97,7 +99,7 @@ function CozinhaPageContent() {
 
   async function loadOrders() {
     try {
-      const res = await fetch("/api/orders/kitchen", { cache: "no-store" });
+      const res = await fetch("/api/orders/kitchen", { cache: "no-store", headers: getCompanyHeaders() });
       if (res.ok) {
         const data = await res.json();
         const pendingCount = data.filter((o: KitchenOrder) => o.status === "SENT_TO_KITCHEN").length;
@@ -121,13 +123,13 @@ function CozinhaPageContent() {
     loadOrders();
     const id = setInterval(loadOrders, 2000);
     return () => clearInterval(id);
-  }, [lastOrderCount]);
+  }, [lastOrderCount, getCompanyHeaders]);
 
   async function markReady(orderId: string) {
     try {
       await fetch(`/api/orders/${orderId}/service`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ status: "READY" }),
       });
       await loadOrders();

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/app/auth-context";
 import { useRouter } from "next/navigation";
@@ -17,7 +17,7 @@ export function Navbar() {
   return (
     <nav className="nav">
       <div className="nav-brand">
-        <img src="/logo.png" alt="Espetinho do Jardim" className="nav-logo" />
+        <img src="/logo.png" alt="MesaFy" className="nav-logo" />
       </div>
       <div className="nav-actions">
         <span className="nav-user">Olá, {user.name}</span>
@@ -28,3 +28,4 @@ export function Navbar() {
     </nav>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useAuth } from "@/app/auth-context";
@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [pin, setPin] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -17,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(pin);
+      await login(companyCode.trim(), username.trim().toLowerCase(), pin);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Erro ao fazer login");
@@ -33,6 +35,24 @@ export default function LoginPage() {
         <p className="page-subtitle">Controle rápido de mesas, pedidos e caixa.</p>
 
         <form onSubmit={handleLogin} className="stack">
+          <div className="field">
+            <label className="label">Código da empresa</label>
+            <input
+              value={companyCode}
+              onChange={(e) => setCompanyCode(e.target.value)}
+              placeholder="Ex: minhaempresa"
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Usuário</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Ex: joao"
+              className="input"
+            />
+          </div>
           <div className="field">
             <label className="label">PIN de acesso</label>
             <input
@@ -53,11 +73,10 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button type="submit" disabled={loading || !pin} className="btn btn-primary">
+          <button type="submit" disabled={loading || !pin || !companyCode || !username} className="btn btn-primary">
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
       </div>
     </main>
   );

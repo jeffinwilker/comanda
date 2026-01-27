@@ -1,10 +1,13 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
-export async function GET(_: Request, { params }: { params: Promise<{ orderId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
   try {
+    const ctx = await getTenantContext(req);
+    if (!ctx) return new Response("Empresa nao definida", { status: 400 });
+
     const { orderId } = await params;
 
-    const order = await prisma.order.findUnique({
+    const order = await ctx.tenant.order.findUnique({
       where: { id: orderId },
       include: {
         table: true,
@@ -16,7 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderId: s
     });
 
     if (!order) {
-      return new Response("Pedido não encontrado", { status: 404 });
+      return new Response("Pedido nao encontrado", { status: 404 });
     }
 
     return Response.json(order);

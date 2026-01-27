@@ -1,7 +1,12 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 export async function GET(req: Request) {
   try {
+    const ctx = await getTenantContext(req);
+    if (!ctx) {
+      return Response.json({ error: "Empresa nao definida" }, { status: 400 });
+    }
+
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
@@ -28,7 +33,7 @@ export async function GET(req: Request) {
       whereCondition.userId = userId;
     }
 
-    const orders = await prisma.order.findMany({
+    const orders = await ctx.tenant.order.findMany({
       where: whereCondition,
       include: {
         table: true,
@@ -77,9 +82,6 @@ export async function GET(req: Request) {
     });
   } catch (error: any) {
     console.error(error);
-    return Response.json(
-      { error: "Erro ao buscar histórico", details: error?.message || "" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Erro ao buscar historico", details: error?.message || "" }, { status: 500 });
   }
 }

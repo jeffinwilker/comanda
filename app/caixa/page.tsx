@@ -1,18 +1,20 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 
 function CaixaPageContent() {
+  const { getCompanyHeaders } = useAuth();
   const [pendingJobs, setPendingJobs] = useState<any[]>([]);
   const [closedJobs, setClosedJobs] = useState<any[]>([]);
   const [tab, setTab] = useState<"pending" | "closed">("pending");
 
   async function load() {
     const [pendingRes, closedRes] = await Promise.all([
-      fetch("/api/printjobs?status=PENDING", { cache: "no-store" }),
-      fetch("/api/printjobs?status=PRINTED", { cache: "no-store" }),
+      fetch("/api/printjobs?status=PENDING", { cache: "no-store", headers: getCompanyHeaders() }),
+      fetch("/api/printjobs?status=PRINTED", { cache: "no-store", headers: getCompanyHeaders() }),
     ]);
     setPendingJobs(await pendingRes.json());
     setClosedJobs(await closedRes.json());
@@ -22,10 +24,13 @@ function CaixaPageContent() {
     load();
     const id = setInterval(load, 3000);
     return () => clearInterval(id);
-  }, []);
+  }, [getCompanyHeaders]);
 
   async function closeAndPrint(printJobId: string, orderId: string) {
-    const res = await fetch(`/api/printjobs/${printJobId}/printed`, { method: "POST" });
+    const res = await fetch(`/api/printjobs/${printJobId}/printed`, {
+      method: "POST",
+      headers: getCompanyHeaders(),
+    });
     if (!res.ok) {
       const message = await res.text();
       alert(message || "Erro ao fechar pedido");
@@ -38,7 +43,7 @@ function CaixaPageContent() {
   async function updateService(orderId: string, enabled: boolean) {
     const res = await fetch(`/api/orders/${orderId}/service`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getCompanyHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ enabled }),
     });
     if (!res.ok) {
@@ -109,7 +114,7 @@ function CaixaPageContent() {
                     onChange={(e) => {
                       fetch(`/api/orders/${j.orderId}/payment`, {
                         method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
+                        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
                         body: JSON.stringify({ paymentMethod: e.target.value }),
                       }).then(() => load());
                     }}
@@ -130,10 +135,7 @@ function CaixaPageContent() {
 
               <div className="stack">
                 {tab === "pending" ? (
-                  <button
-                    onClick={() => closeAndPrint(j.id, j.orderId)}
-                    className="btn btn-secondary"
-                  >
+                  <button onClick={() => closeAndPrint(j.id, j.orderId)} className="btn btn-secondary">
                     Fechar pedido
                   </button>
                 ) : (

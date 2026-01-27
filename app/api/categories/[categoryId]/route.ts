@@ -1,17 +1,27 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ categoryId: string }> }) {
   try {
-    const { categoryId } = await params;
-    const { name, isActive } = await request.json();
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
 
-    const category = await prisma.category.update({
+    const { categoryId } = await params;
+    const body = await request.json();
+    const name = String(body?.name || "").trim();
+
+    if (!name) {
+      return NextResponse.json({ error: "Nome e obrigatorio" }, { status: 400 });
+    }
+
+    const existing = await ctx.tenant.category.findUnique({ where: { id: categoryId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Categoria nao encontrada" }, { status: 404 });
+    }
+
+    const category = await ctx.tenant.category.update({
       where: { id: categoryId },
-      data: {
-        name: name ? String(name).trim() : undefined,
-        isActive: isActive === undefined ? undefined : Boolean(isActive),
-      },
+      data: { name },
     });
 
     return NextResponse.json(category);
@@ -23,9 +33,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ categoryId: string }> }) {
   try {
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
+
     const { categoryId } = await params;
 
-    await prisma.category.delete({
+    const existing = await ctx.tenant.category.findUnique({ where: { id: categoryId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Categoria nao encontrada" }, { status: 404 });
+    }
+
+    await ctx.tenant.category.delete({
       where: { id: categoryId },
     });
 

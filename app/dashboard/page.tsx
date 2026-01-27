@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "@/app/auth-context";
 import { useRouter } from "next/navigation";
@@ -43,3 +43,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

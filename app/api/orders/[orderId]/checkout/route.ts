@@ -1,21 +1,24 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
-export async function POST(_: Request, { params }: { params: Promise<{ orderId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const ctx = await getTenantContext(req);
+  if (!ctx) return new Response("Empresa nao definida", { status: 400 });
+
   const { orderId } = await params;
 
-  const order = await prisma.order.findUnique({
+  const order = await ctx.tenant.order.findUnique({
     where: { id: orderId },
     include: { items: true },
   });
 
   if (!order) {
-    return new Response("Pedido não encontrado", { status: 404 });
+    return new Response("Pedido nao encontrado", { status: 404 });
   }
 
-  
   if (order.status === "CLOSED" || order.status === "CANCELED") {
-    return new Response("Pedido j� foi finalizado", { status: 400 });
+    return new Response("Pedido ja foi finalizado", { status: 400 });
   }
+
   const activeItems = (order.items || []).filter((it) => !it.canceledAt);
   if (activeItems.length === 0) {
     return new Response("Pedido sem itens", { status: 400 });
@@ -23,10 +26,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
 
   const hasPendingKitchen = activeItems.some((it) => it.sentToKitchenAt && !it.preparedAt);
   if (hasPendingKitchen) {
-    return new Response("Pedido só pode ir para o caixa após a cozinha finalizar", { status: 400 });
+    return new Response("Pedido so pode ir para o caixa apos a cozinha finalizar", { status: 400 });
   }
 
-  const existing = await prisma.printJob.findFirst({
+  const existing = await ctx.tenant.printJob.findFirst({
     where: { orderId, status: "PENDING" },
   });
 
@@ -34,7 +37,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
     return Response.json(existing);
   }
 
-  const printJob = await prisma.$transaction(async (tx: any) => {
+  const printJob = await ctx.tenant.$transaction(async (tx: any) => {
     await tx.order.update({
       where: { id: orderId },
       data: { status: "WAITING_PAYMENT" },
@@ -57,7 +60,3 @@ export async function POST(_: Request, { params }: { params: Promise<{ orderId: 
 
   return Response.json(printJob);
 }
-
-
-
-

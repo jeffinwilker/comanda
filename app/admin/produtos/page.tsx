@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 
 type Product = { id: string; code?: string | null; name: string; priceCents: number; imageUrl?: string | null };
 
 function AdminProdutosContent() {
+  const { getCompanyHeaders } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -16,13 +18,13 @@ function AdminProdutosContent() {
   const [loading, setLoading] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/products", { cache: "no-store" });
+    const res = await fetch("/api/products", { cache: "no-store", headers: getCompanyHeaders() });
     setProducts(await res.json());
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [getCompanyHeaders]);
 
   useEffect(() => {
     if (imageFile) {
@@ -40,7 +42,7 @@ function AdminProdutosContent() {
     const p = Number(price.replace(",", "."));
 
     if (!n || !Number.isFinite(p)) {
-      alert("Preencha nome e preço (ex: 12,50)");
+      alert("Preencha nome e preÃ§o (ex: 12,50)");
       return;
     }
 
@@ -64,7 +66,7 @@ function AdminProdutosContent() {
 
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ name: n, price: p, imageUrl: uploadedUrl }),
       });
 
@@ -93,7 +95,7 @@ function AdminProdutosContent() {
       <Navbar />
       <main className="page page-narrow">
         <h1 className="page-title">Admin - Produtos</h1>
-        <p className="page-subtitle">Inclua novos itens no cardápio.</p>
+        <p className="page-subtitle">Inclua novos itens no cardÃ¡pio.</p>
 
         <form onSubmit={create} className="card stack">
           <div className="field">
@@ -106,7 +108,7 @@ function AdminProdutosContent() {
             />
           </div>
           <div className="field">
-            <label className="label">Preço</label>
+            <label className="label">PreÃ§o</label>
             <input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
@@ -152,7 +154,7 @@ function AdminProdutosContent() {
                 <div className="row">
                   {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="product-thumb" /> : null}
                   <strong>{p.name}</strong>
-                  {p.code ? <div className="muted">Código: {p.code}</div> : null}
+                  {p.code ? <div className="muted">CÃ³digo: {p.code}</div> : null}
                   <div className="muted">R$ {money(p.priceCents)}</div>
                 </div>
               </div>

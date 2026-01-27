@@ -1,11 +1,19 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const tables = await prisma.table.findMany({
+    const ctx = await getTenantContext(req);
+    if (!ctx) {
+      return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const tables = await ctx.tenant.table.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       include: {
@@ -45,29 +53,37 @@ export async function GET() {
     return Response.json(payload);
   } catch (error: any) {
     console.error("Erro em GET /api/tables:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro ao carregar tabelas" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Erro ao carregar tabelas" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
 export async function POST(req: Request) {
   try {
+    const ctx = await getTenantContext(req);
+    if (!ctx) {
+      return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json();
     const name = String(body?.name || "").trim();
-    if (!name) return new Response("name obrigatório", { status: 400 });
+    if (!name) return new Response("name obrigatorio", { status: 400 });
 
-    const table = await prisma.table.create({
-      data: { name, isActive: true },
+    const table = await ctx.tenant.table.create({
+      data: { name, isActive: true, companyId: ctx.company.id },
     });
 
     return Response.json(table);
   } catch (error: any) {
     console.error("Erro em POST /api/tables:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro ao criar tabela" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Erro ao criar tabela" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth, UserRole } from "@/app/auth-context";
 import { useRouter } from "next/navigation";
@@ -50,3 +50,4 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
 
   return <>{children}</>;
 }
+

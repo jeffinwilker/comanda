@@ -8,13 +8,16 @@ export interface AuthUser {
   id: string;
   name: string;
   role: UserRole;
+  companyId: string;
+  companyName?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (pin: string) => Promise<void>;
+  login: (companyCode: string, username: string, pin: string) => Promise<void>;
   logout: () => void;
+  getCompanyHeaders: (extra?: HeadersInit) => HeadersInit;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,17 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = async (pin: string) => {
+  const login = async (companyCode: string, username: string, pin: string) => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, companyCode, username }),
       });
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "PIN inválido");
+        throw new Error(error.error || "Credenciais invalidas");
       }
 
       const userData = await res.json();
@@ -61,8 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("auth_user");
   };
 
+  const getCompanyHeaders = (extra: HeadersInit = {}) => {
+    const headers = new Headers(extra);
+    if (user?.companyId) headers.set("x-company-id", user.companyId);
+    return headers;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, getCompanyHeaders }}>
       {children}
     </AuthContext.Provider>
   );

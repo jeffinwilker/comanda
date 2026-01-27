@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 
 type Table = { id: string; name: string; isActive: boolean };
 
 function AdminMesasContent() {
+  const { getCompanyHeaders } = useAuth();
   const [tables, setTables] = useState<Table[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,13 +16,13 @@ function AdminMesasContent() {
   const [editingName, setEditingName] = useState("");
 
   async function load() {
-    const res = await fetch("/api/tables", { cache: "no-store" });
+    const res = await fetch("/api/tables", { cache: "no-store", headers: getCompanyHeaders() });
     setTables(await res.json());
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [getCompanyHeaders]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -31,7 +33,7 @@ function AdminMesasContent() {
     try {
       const res = await fetch("/api/tables", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getCompanyHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ name: n }),
       });
 
@@ -84,7 +86,7 @@ function AdminMesasContent() {
                           if (!updated) return;
                           const res = await fetch(`/api/tables/${t.id}`, {
                             method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
+                            headers: getCompanyHeaders({ "Content-Type": "application/json" }),
                             body: JSON.stringify({ name: updated }),
                           });
                           if (res.ok) {

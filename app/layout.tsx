@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Space_Grotesk, Fraunces, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./auth-context";
 import { PwaRegister } from "./pwa-register";
+import { AlertHost } from "./alert-host";
 
 const bodyFont = Space_Grotesk({
   variable: "--font-body",
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: "/icons/icon.svg",
+    icon: "/icons/icon-192.png",
     apple: "/icons/apple-touch-icon.png",
   },
 };
@@ -45,8 +46,10 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <PwaRegister />
+          <AlertHost />
         </AuthProvider>
       </body>
     </html>
   );
 }
+

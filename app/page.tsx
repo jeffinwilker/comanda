@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useAuth } from "./auth-context";
 import { useRouter } from "next/navigation";
@@ -25,3 +25,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -1,8 +1,16 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const orders = await prisma.order.findMany({
+    const ctx = await getTenantContext(req);
+    if (!ctx) {
+      return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const orders = await ctx.tenant.order.findMany({
       where: {
         status: {
           in: ["OPEN", "SENT_TO_KITCHEN", "READY"],
@@ -21,9 +29,9 @@ export async function GET() {
     return Response.json(orders);
   } catch (error: any) {
     console.error("Erro em GET /api/orders/kitchen:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro ao carregar pedidos" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Erro ao carregar pedidos" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

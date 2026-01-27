@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
 import { useState, useEffect } from "react";
@@ -17,6 +17,28 @@ import {
 } from "recharts";
 
 type DateRange = { start: string; end: string };
+
+function buildCompanyHeaders(extra: HeadersInit = {}) {
+  const headers = new Headers(extra);
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("auth_user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.companyId) {
+          headers.set("x-company-id", parsed.companyId);
+        }
+      }
+    } catch {
+      // ignore parse issues
+    }
+  }
+  return headers;
+}
+
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  return fetch(input, { ...init, headers: buildCompanyHeaders(init.headers || {}) });
+}
 
 function formatDateInput(date: Date) {
   const yyyy = date.getFullYear();
@@ -64,15 +86,109 @@ function getPresetRange(preset: "today" | "week" | "lastWeek" | "month" | "lastM
   return getMonthRange(now.getFullYear(), now.getMonth() + 1);
 }
 
+function MenuIcon({ id }: { id: string }) {
+  switch (id) {
+    case "home":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"
+            fill="currentColor"
+          />
+        </svg>
+      );
+    case "products":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M3 7l9-4 9 4-9 4-9-4z" />
+          <path d="M3 7v10l9 4 9-4V7" />
+          <path d="M12 11v10" />
+        </svg>
+      );
+    case "relatorios":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 20V10" />
+          <path d="M12 20V4" />
+          <path d="M20 20V14" />
+          <path d="M3 20h18" />
+        </svg>
+      );
+    case "tables":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 10h18M9 5v14M15 5v14" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20c1.8-3 4.6-5 8-5s6.2 2 8 5" />
+        </svg>
+      );
+    case "caixa":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M8 8h8M8 12h8M8 16h5" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 6h16" />
+          <path d="M4 12h16" />
+          <path d="M4 18h16" />
+          <circle cx="9" cy="6" r="2" />
+          <circle cx="15" cy="12" r="2" />
+          <circle cx="11" cy="18" r="2" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 function AdminDashboardContent() {
-  const [section, setSection] = useState<"home" | "products" | "categories" | "tables" | "users" | "relatorios" | "caixa">("home");
+  const [section, setSection] = useState<
+    "home" | "products" | "categories" | "tables" | "users" | "relatorios" | "caixa" | "settings"
+  >("home");
   const [productsMenuOpen, setProductsMenuOpen] = useState(true);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadCompany() {
+      try {
+        const res = await authFetch("/api/company");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active) {
+          setCompanyLogo(data?.logoUrl || null);
+          setCompanyName(data?.name || "");
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    loadCompany();
+    const handleCompanyUpdated = () => loadCompany();
+    window.addEventListener("company-updated", handleCompanyUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener("company-updated", handleCompanyUpdated);
+    };
+  }, []);
 
   const menuItems = [
     { id: "relatorios", label: "Relatórios" },
     { id: "tables", label: "Mesas" },
     { id: "users", label: "Usuários" },
     { id: "caixa", label: "Caixa" },
+    { id: "settings", label: "Configuração" },
   ];
 
   return (
@@ -81,6 +197,12 @@ function AdminDashboardContent() {
       <main className="admin-layout">
         <nav className="admin-sidebar">
           <div>
+            {companyLogo ? (
+              <div className="company-brand">
+                <img src={companyLogo} alt={companyName || "Logo da empresa"} />
+                {companyName ? <span>{companyName}</span> : null}
+              </div>
+            ) : null}
             <div className="pill" style={{ marginBottom: 12 }}>
               Administração
             </div>
@@ -93,6 +215,9 @@ function AdminDashboardContent() {
             onClick={() => setSection("home")}
             className={`nav-item ${section === "home" ? "active" : ""}`}
           >
+            <span className="nav-icon">
+              <MenuIcon id="home" />
+            </span>
             Dashboard
           </button>
 
@@ -105,6 +230,9 @@ function AdminDashboardContent() {
             }}
             className={`nav-item ${section === "products" || section === "categories" ? "active" : ""}`}
           >
+            <span className="nav-icon">
+              <MenuIcon id="products" />
+            </span>
             Produtos
           </button>
           {productsMenuOpen ? (
@@ -130,6 +258,9 @@ function AdminDashboardContent() {
               onClick={() => setSection(item.id as any)}
               className={`nav-item ${section === item.id ? "active" : ""}`}
             >
+              <span className="nav-icon">
+                <MenuIcon id={item.id} />
+              </span>
               {item.label}
             </button>
           ))}
@@ -140,6 +271,7 @@ function AdminDashboardContent() {
           {section === "relatorios" && <RelatoriosSection />}
           {section === "products" && <ProductsSection />}
           {section === "categories" && <CategoriesSection />}
+          {section === "settings" && <CompanySettingsSection />}
           {section === "tables" && <TablesSection />}
           {section === "users" && <UsersSection />}
           {section === "caixa" && <ClosedOrdersSection />}
@@ -156,10 +288,10 @@ function DashboardHome() {
   useEffect(() => {
     async function loadStats() {
       try {
-        const ordersRes = await fetch("/api/orders").catch(() => null);
-        const productsRes = await fetch("/api/products").catch(() => null);
-        const tablesRes = await fetch("/api/tables").catch(() => null);
-        const usersRes = await fetch("/api/users").catch(() => null);
+        const ordersRes = await authFetch("/api/orders").catch(() => null);
+        const productsRes = await authFetch("/api/products").catch(() => null);
+        const tablesRes = await authFetch("/api/tables").catch(() => null);
+        const usersRes = await authFetch("/api/users").catch(() => null);
 
         const orders = ordersRes && ordersRes.ok ? await ordersRes.json() : [];
         const products = productsRes && productsRes.ok ? await productsRes.json() : [];
@@ -270,7 +402,7 @@ function RelatoriosSection() {
       const params = new URLSearchParams();
       params.append("startDate", startDate);
       params.append("endDate", endDate);
-      const res = await fetch(`/api/reports?${params}`);
+      const res = await authFetch(`/api/reports?${params}`);
       if (!res.ok) {
         throw new Error("Erro ao carregar relatorio");
       }
@@ -507,7 +639,7 @@ function RelatoriosHistoricoTab() {
     if (waiter !== "all") params.append("userId", waiter);
 
     try {
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await authFetch(`/api/sales/history?${params}`);
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -524,7 +656,7 @@ function RelatoriosHistoricoTab() {
   }
 
   useEffect(() => {
-    fetch("/api/users")
+    authFetch("/api/users")
       .then((r) => r.json())
       .then((data) => setUsers(data || []))
       .catch((e) => console.error(e));
@@ -708,7 +840,7 @@ function RelatoriosProdutosTab() {
       if (start) params.append("startDate", start);
       if (end) params.append("endDate", end);
 
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await authFetch(`/api/sales/history?${params}`);
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -817,7 +949,7 @@ function ClosedOrdersSection() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
+      const res = await authFetch("/api/orders", { cache: "no-store" });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -977,7 +1109,7 @@ function ProductsSection() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/products");
+      const res = await authFetch("/api/products");
       if (res.ok) {
         setProducts(await res.json());
       }
@@ -993,7 +1125,7 @@ function ProductsSection() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/categories")
+    authFetch("/api/categories")
       .then((r) => r.json())
       .then((data) => setCategories(Array.isArray(data) ? data : []))
       .catch((e) => console.error(e));
@@ -1011,7 +1143,7 @@ function ProductsSection() {
   async function uploadImage(file: File) {
     const data = new FormData();
     data.append("file", file);
-    const res = await fetch("/api/products/upload", {
+    const res = await authFetch("/api/products/upload", {
       method: "POST",
       body: data,
     });
@@ -1037,19 +1169,21 @@ function ProductsSection() {
         imageUrl = await uploadImage(imageFile);
       }
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, imageUrl, categoryId: formData.categoryId || null }),
       });
 
-      if (res.ok) {
-        setShowForm(false);
-        setEditingId(null);
-        setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "" });
-        setImageFile(null);
-        await loadProducts();
+      if (!res.ok) {
+        alert(await res.text());
+        return;
       }
+      setShowForm(false);
+      setEditingId(null);
+      setFormData({ name: "", priceCents: 0, imageUrl: "", categoryId: "" });
+      setImageFile(null);
+      await loadProducts();
     } catch (e) {
       console.error(e);
       alert("Erro ao salvar produto");
@@ -1060,7 +1194,7 @@ function ProductsSection() {
     if (!confirm("Tem certeza?")) return;
 
     try {
-      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/products/${id}`, { method: "DELETE" });
       if (res.ok) {
         await loadProducts();
       } else {
@@ -1343,7 +1477,7 @@ function CategoriesSection() {
   const loadCategories = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/categories");
+      const res = await authFetch("/api/categories");
       if (res.ok) {
         const data = await res.json();
         const sorted = Array.isArray(data)
@@ -1371,7 +1505,7 @@ function CategoriesSection() {
     }
 
     try {
-      const res = await fetch("/api/categories", {
+      const res = await authFetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: formData.name.trim() }),
@@ -1444,7 +1578,7 @@ function CategoriesSection() {
                         const name = editingName.trim();
                         if (!name) return;
                         try {
-                          const res = await fetch(`/api/categories/${c.id}`, {
+                          const res = await authFetch(`/api/categories/${c.id}`, {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ name }),
@@ -1490,7 +1624,7 @@ function CategoriesSection() {
                       onClick={async () => {
                         if (!confirm("Tem certeza?")) return;
                         try {
-                          const res = await fetch(`/api/categories/${c.id}`, { method: "DELETE" });
+                          const res = await authFetch(`/api/categories/${c.id}`, { method: "DELETE" });
                           if (res.ok) {
                             await loadCategories();
                           }
@@ -1513,6 +1647,186 @@ function CategoriesSection() {
   );
 }
 
+function CompanySettingsSection() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    logoUrl: "",
+  });
+
+  const loadCompany = async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch("/api/company");
+      if (res.ok) {
+        const data = await res.json();
+        setFormData({
+          name: data?.name || "",
+          phone: data?.phone || "",
+          email: data?.email || "",
+          address: data?.address || "",
+          logoUrl: data?.logoUrl || "",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCompany();
+  }, []);
+
+  const handleUpload = async (file: File | null) => {
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await authFetch("/api/products/upload", {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        alert(await res.text());
+        return;
+      }
+      const data = await res.json();
+      setFormData((prev) => ({ ...prev, logoUrl: data.url }));
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao enviar imagem");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!formData.name.trim()) {
+      alert("Nome da empresa é obrigatório");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await authFetch("/api/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          address: formData.address.trim(),
+          logoUrl: formData.logoUrl.trim(),
+        }),
+      });
+      if (!res.ok) {
+        alert(await res.text());
+        return;
+      }
+      await loadCompany();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("company-updated"));
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="row-between section">
+        <div>
+          <h2 className="page-title">Configuração da empresa</h2>
+          <p className="page-subtitle">Atualize as informações e a identidade visual.</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="muted">Carregando...</p>
+      ) : (
+        <div className="card section stack">
+          <div className="field">
+            <label className="label">Nome da empresa</label>
+            <input
+              type="text"
+              className="input"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-tight">
+            <div className="field">
+              <label className="label">Telefone</label>
+              <input
+                type="text"
+                className="input"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label className="label">Email</label>
+              <input
+                type="email"
+                className="input"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label className="label">Endereço</label>
+            <input
+              type="text"
+              className="input"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label className="label">Logo</label>
+            <div className="row">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleUpload(e.target.files?.[0] || null)}
+              />
+              {formData.logoUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, logoUrl: "" })}
+                  className="btn btn-ghost"
+                >
+                  Remover logo
+                </button>
+              ) : null}
+            </div>
+            {formData.logoUrl ? (
+              <div style={{ marginTop: 12 }}>
+                <img src={formData.logoUrl} alt="Logo da empresa" style={{ maxHeight: 80 }} />
+              </div>
+            ) : null}
+          </div>
+          <div className="row">
+            <button onClick={handleSave} className="btn btn-primary" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={loadCompany} className="btn btn-ghost">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TablesSection() {
   const [tables, setTables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1524,7 +1838,7 @@ function TablesSection() {
   const loadTables = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/tables");
+      const res = await authFetch("/api/tables");
       if (res.ok) {
         const data = await res.json();
         const sorted = Array.isArray(data)
@@ -1552,7 +1866,7 @@ function TablesSection() {
     }
 
     try {
-      const res = await fetch("/api/tables", {
+      const res = await authFetch("/api/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -1629,7 +1943,7 @@ function TablesSection() {
                         const name = editingName.trim();
                         if (!name) return;
                         try {
-                          const res = await fetch(`/api/tables/${t.id}`, {
+                          const res = await authFetch(`/api/tables/${t.id}`, {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ name }),
@@ -1675,7 +1989,7 @@ function TablesSection() {
                       onClick={async () => {
                         if (!confirm("Tem certeza?")) return;
                         try {
-                          const res = await fetch(`/api/tables/${t.id}`, { method: "DELETE" });
+                          const res = await authFetch(`/api/tables/${t.id}`, { method: "DELETE" });
                           if (res.ok) {
                             await loadTables();
                           }
@@ -1702,12 +2016,12 @@ function UsersSection() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", pin: "", role: "GARCOM" });
+  const [formData, setFormData] = useState({ name: "", username: "", pin: "", role: "GARCOM" });
 
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/users");
+      const res = await authFetch("/api/users");
       if (res.ok) {
         setUsers(await res.json());
       }
@@ -1723,23 +2037,26 @@ function UsersSection() {
   }, []);
 
   const handleSave = async () => {
-    if (!formData.name || !formData.pin) {
+    if (!formData.name || !formData.pin || !formData.username) {
       alert("Preencha todos os campos");
       return;
     }
 
     try {
-      const res = await fetch("/api/users", {
+      const res = await authFetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({ name: "", pin: "", role: "GARCOM" });
-        await loadUsers();
+      if (!res.ok) {
+        alert(await res.text());
+        return;
       }
+
+      setShowForm(false);
+      setFormData({ name: "", username: "", pin: "", role: "GARCOM" });
+      await loadUsers();
     } catch (e) {
       console.error(e);
       alert("Erro ao salvar usuario");
@@ -1752,17 +2069,17 @@ function UsersSection() {
     <div>
       <div className="row-between section">
         <div>
-          <h2 className="page-title">Usuários</h2>
-          <p className="page-subtitle">Controle de acesso por função.</p>
+        <h2 className="page-title">Usuários</h2>
+        <p className="page-subtitle">Controle de acesso por função.</p>
         </div>
         <button
           onClick={() => {
             setShowForm(!showForm);
-            setFormData({ name: "", pin: "", role: "GARCOM" });
+            setFormData({ name: "", username: "", pin: "", role: "GARCOM" });
           }}
           className="btn btn-success"
         >
-          Novo usuario
+          Novo usuário
         </button>
       </div>
 
@@ -1775,6 +2092,16 @@ function UsersSection() {
               placeholder="Nome"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="input"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Usuário</label>
+            <input
+              type="text"
+              placeholder="Ex: joao"
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               className="input"
             />
           </div>
@@ -1828,7 +2155,7 @@ function UsersSection() {
                 onClick={async () => {
                   if (!confirm("Tem certeza?")) return;
                   try {
-                    const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+                    const res = await authFetch(`/api/users/${u.id}`, { method: "DELETE" });
                     if (res.ok) {
                       await loadUsers();
                     }
@@ -1855,6 +2182,12 @@ export default function AdminPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
+
 
 
 

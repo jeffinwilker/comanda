@@ -1,7 +1,15 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 export async function GET(req: Request) {
   try {
+    const ctx = await getTenantContext(req);
+    if (!ctx) {
+      return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const { searchParams } = new URL(req.url);
     const month = searchParams.get("month");
     const year = searchParams.get("year");
@@ -25,8 +33,7 @@ export async function GET(req: Request) {
       endDate = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
     }
 
-    // Total de pedidos fechados no período
-    const totalOrders = await prisma.order.count({
+    const totalOrders = await ctx.tenant.order.count({
       where: {
         closedAt: {
           gte: startDate,
@@ -35,8 +42,7 @@ export async function GET(req: Request) {
       },
     });
 
-    // Valor total vendido
-    const totalSales = await prisma.order.aggregate({
+    const totalSales = await ctx.tenant.order.aggregate({
       where: {
         closedAt: {
           gte: startDate,
@@ -50,8 +56,7 @@ export async function GET(req: Request) {
 
     const totalCents = totalSales._sum.totalCents || 0;
 
-    // Vendas por dia
-    const allOrders = await prisma.order.findMany({
+    const allOrders = await ctx.tenant.order.findMany({
       where: {
         closedAt: {
           gte: startDate,
@@ -102,9 +107,9 @@ export async function GET(req: Request) {
     });
   } catch (error: any) {
     console.error("Erro em GET /api/reports:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro ao carregar relatórios" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Erro ao carregar relatorios" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

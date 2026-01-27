@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("MASTER_DATABASE_URL")
 }
 
 enum Role {
@@ -31,7 +31,10 @@ enum PaymentMethod {
 
 model User {
   id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
   name      String
+  username  String   @unique
   pin       String
   role      Role     @default(GARCOM)
   isActive  Boolean  @default(true)
@@ -41,6 +44,8 @@ model User {
 
 model Table {
   id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
   name      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -49,6 +54,8 @@ model Table {
 
 model Product {
   id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
   code       String   @unique
   name       String
   priceCents Int
@@ -64,6 +71,8 @@ model Product {
 
 model Category {
   id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
   name      String   @unique
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -72,6 +81,8 @@ model Category {
 
 model Order {
   id             String      @id @default(cuid())
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id])
   code           String      @unique
   tableId        String
   table          Table       @relation(fields: [tableId], references: [id])
@@ -118,4 +129,31 @@ model PrintJob {
   status    String   @default("PENDING")
   createdAt DateTime @default(now())
   printedAt DateTime?
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  dbName    String   @unique
+  logoUrl   String?
+  phone     String?
+  email     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  users     User[]
+  tables    Table[]
+  products  Product[]
+  categories Category[]
+  orders    Order[]
+}
+
+model SuperAdmin {
+  id        String   @id @default(cuid())
+  name      String
+  username  String   @unique
+  pin       String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

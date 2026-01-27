@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 import {
   LineChart,
   Line,
@@ -14,9 +15,11 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 
 function RelatoriosPageContent() {
+  const { getCompanyHeaders } = useAuth();
   const [tab, setTab] = useState<"resumo" | "historico" | "pedidos" | "produtos">("resumo");
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -32,9 +35,9 @@ function RelatoriosPageContent() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports?month=${m}&year=${y}`);
+      const res = await fetch(`/api/reports?month=${m}&year=${y}`, { headers: getCompanyHeaders() });
       if (!res.ok) {
-        throw new Error("Erro ao carregar relatorio");
+        throw new Error("Erro ao carregar relatÃ³rio");
       }
       const data = await res.json();
       setReport(data);
@@ -48,21 +51,21 @@ function RelatoriosPageContent() {
 
   useEffect(() => {
     loadReport(month, year);
-  }, [month, year]);
+  }, [month, year, getCompanyHeaders]);
 
   return (
     <>
       <Navbar />
       <main className="page">
-        <h1 className="page-title">Relatórios de vendas</h1>
-        <p className="page-subtitle">Resumo mensal e histórico detalhado.</p>
+        <h1 className="page-title">RelatÃ³rios de vendas</h1>
+        <p className="page-subtitle">Resumo mensal e histÃ³rico detalhado.</p>
 
         <div className="row section">
           <button onClick={() => setTab("resumo")} className={`btn ${tab === "resumo" ? "btn-primary" : "btn-ghost"}`}>
             Resumo mensal
           </button>
           <button onClick={() => setTab("historico")} className={`btn ${tab === "historico" ? "btn-primary" : "btn-ghost"}`}>
-            Histórico detalhado
+            HistÃ³rico detalhado
           </button>
           <button onClick={() => setTab("pedidos")} className={`btn ${tab === "pedidos" ? "btn-primary" : "btn-ghost"}`}>
             Pedidos por data
@@ -76,7 +79,7 @@ function RelatoriosPageContent() {
           <div>
             <div className="grid grid-tight section">
               <div className="field">
-                <label className="label">Mês</label>
+                <label className="label">MÃªs</label>
                 <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))} className="select">
                   {Array.from({ length: 12 }, (_, i) => (
                     <option key={i + 1} value={i + 1}>
@@ -101,9 +104,9 @@ function RelatoriosPageContent() {
             </div>
 
             {loading ? (
-              <p className="muted">Carregando relatório...</p>
+              <p className="muted">Carregando relatÃ³rio...</p>
             ) : error || !report ? (
-              <div className="card card-soft">{error || "Nenhum dado disponível para este período"}</div>
+              <div className="card card-soft">{error || "Nenhum dado disponÃ­vel para este perÃ­odo"}</div>
             ) : (
               <>
                 <div className="grid grid-auto section">
@@ -116,14 +119,14 @@ function RelatoriosPageContent() {
                     <div style={{ fontSize: "1.6rem", fontWeight: 700 }}>R$ {money(report.summary.totalCents)}</div>
                   </div>
                   <div className="card">
-                    <div className="label">Ticket médio</div>
+                    <div className="label">Ticket mÃ©dio</div>
                     <div style={{ fontSize: "1.6rem", fontWeight: 700 }}>R$ {money(report.summary.averageOrderValue)}</div>
                   </div>
                 </div>
 
                 {report.salesByDay && report.salesByDay.length > 0 && (
                   <div className="chart-card section">
-                    <h2>Receita diária</h2>
+                    <h2>Receita diÃ¡ria</h2>
                     <div className="chart-area">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={report.salesByDay}>
@@ -177,7 +180,7 @@ function RelatoriosPageContent() {
                 )}
 
                 <div className="card section">
-                  <h2>Detalhes diários</h2>
+                  <h2>Detalhes diÃ¡rios</h2>
                   <div style={{ overflowX: "auto" }}>
                     <table className="table">
                       <thead>
@@ -213,6 +216,7 @@ function RelatoriosPageContent() {
 }
 
 function HistoricoDetalhado() {
+  const { getCompanyHeaders } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [topItems, setTopItems] = useState<any[]>([]);
@@ -233,7 +237,7 @@ function HistoricoDetalhado() {
       if (endDate) params.append("endDate", endDate);
       if (selectedUser) params.append("userId", selectedUser);
 
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await fetch(`/api/sales/history?${params}`, { headers: getCompanyHeaders() });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -252,11 +256,11 @@ function HistoricoDetalhado() {
 
   useEffect(() => {
     async function loadUsers() {
-      const res = await fetch("/api/users");
+      const res = await fetch("/api/users", { headers: getCompanyHeaders() });
       setUsers(await res.json());
     }
     loadUsers();
-  }, []);
+  }, [getCompanyHeaders]);
 
   useEffect(() => {
     load();
@@ -279,7 +283,7 @@ function HistoricoDetalhado() {
         </div>
 
         <div className="field">
-          <label className="label">Garçom</label>
+          <label className="label">GarÃ§om</label>
           <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="select">
             <option value="">Todos</option>
             {users
@@ -308,11 +312,11 @@ function HistoricoDetalhado() {
             <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.totalRevenue)}</div>
           </div>
           <div className="card">
-            <div className="label">Ticket médio</div>
+            <div className="label">Ticket mÃ©dio</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.averageTicket)}</div>
           </div>
           <div className="card">
-            <div className="label">Total serviço</div>
+            <div className="label">Total serviÃ§o</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.totalService)}</div>
           </div>
         </div>
@@ -337,7 +341,7 @@ function HistoricoDetalhado() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="muted">Sem vendas neste período</p>
+          <p className="muted">Sem vendas neste perÃ­odo</p>
         )}
       </div>
 
@@ -358,19 +362,19 @@ function HistoricoDetalhado() {
       <div className="card">
         <h3>Detalhe de vendas</h3>
         {orders.length === 0 ? (
-          <p className="muted">Sem vendas neste período</p>
+          <p className="muted">Sem vendas neste perÃ­odo</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th>Código</th>
+                  <th>CÃ³digo</th>
                   <th>Data/Hora</th>
                   <th>Mesa</th>
-                  <th>Garçom</th>
+                  <th>GarÃ§om</th>
                   <th>Itens</th>
                   <th style={{ textAlign: "right" }}>Subtotal</th>
-                  <th style={{ textAlign: "right" }}>Serviço</th>
+                  <th style={{ textAlign: "right" }}>ServiÃ§o</th>
                   <th style={{ textAlign: "right" }}>Total</th>
                   <th style={{ textAlign: "center" }}>Pagamento</th>
                 </tr>
@@ -402,6 +406,7 @@ function HistoricoDetalhado() {
 }
 
 function PedidosPorData() {
+  const { getCompanyHeaders } = useAuth();
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [orders, setOrders] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -418,7 +423,7 @@ function PedidosPorData() {
         params.append("startDate", date);
         params.append("endDate", date);
       }
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await fetch(`/api/sales/history?${params}`, { headers: getCompanyHeaders() });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -515,10 +520,10 @@ function PedidosPorData() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Código</th>
+                      <th>CÃ³digo</th>
                       <th>Data/Hora</th>
                       <th>Mesa</th>
-                      <th>Garçom</th>
+                      <th>GarÃ§om</th>
                       <th>Itens</th>
                       <th style={{ textAlign: "right" }}>Total</th>
                       <th style={{ textAlign: "center" }}>Pagamento</th>
@@ -548,6 +553,7 @@ function PedidosPorData() {
 }
 
 function ProdutosVendidos() {
+  const { getCompanyHeaders } = useAuth();
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -566,7 +572,7 @@ function ProdutosVendidos() {
       const params = new URLSearchParams();
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await fetch(`/api/sales/history?${params}`, { headers: getCompanyHeaders() });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -628,13 +634,13 @@ function ProdutosVendidos() {
           <div className="card">
             <h3>Produtos vendidos</h3>
             {items.length === 0 ? (
-              <p className="muted">Sem vendas neste período</p>
+              <p className="muted">Sem vendas neste perÃ­odo</p>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Código</th>
+                      <th>CÃ³digo</th>
                       <th>Produto</th>
                       <th style={{ textAlign: "right" }}>Quantidade</th>
                     </tr>

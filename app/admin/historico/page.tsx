@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { Navbar } from "@/app/navbar";
 import { ProtectedRoute } from "@/app/protected-route";
+import { useAuth } from "@/app/auth-context";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 function HistoricoContent() {
+  const { getCompanyHeaders } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [topItems, setTopItems] = useState<any[]>([]);
@@ -26,7 +28,7 @@ function HistoricoContent() {
       if (endDate) params.append("endDate", endDate);
       if (selectedUser) params.append("userId", selectedUser);
 
-      const res = await fetch(`/api/sales/history?${params}`);
+      const res = await fetch(`/api/sales/history?${params}`, { headers: getCompanyHeaders() });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -45,11 +47,11 @@ function HistoricoContent() {
 
   useEffect(() => {
     async function loadUsers() {
-      const res = await fetch("/api/users");
+      const res = await fetch("/api/users", { headers: getCompanyHeaders() });
       setUsers(await res.json());
     }
     loadUsers();
-  }, []);
+  }, [getCompanyHeaders]);
 
   useEffect(() => {
     load();
@@ -62,8 +64,8 @@ function HistoricoContent() {
     <>
       <Navbar />
       <main className="page">
-        <h1 className="page-title">Histórico de vendas</h1>
-        <p className="page-subtitle">Analise o desempenho por período e garçom.</p>
+        <h1 className="page-title">HistÃ³rico de vendas</h1>
+        <p className="page-subtitle">Analise o desempenho por perÃ­odo e garÃ§om.</p>
 
         <div className="grid grid-tight section">
           <div className="field">
@@ -77,7 +79,7 @@ function HistoricoContent() {
           </div>
 
           <div className="field">
-            <label className="label">Garçom</label>
+            <label className="label">GarÃ§om</label>
             <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="select">
               <option value="">Todos</option>
               {users
@@ -102,11 +104,11 @@ function HistoricoContent() {
               <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.totalRevenue)}</div>
             </div>
             <div className="card">
-              <div className="label">Ticket médio</div>
+              <div className="label">Ticket mÃ©dio</div>
               <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.averageTicket)}</div>
             </div>
             <div className="card">
-              <div className="label">Total serviço</div>
+              <div className="label">Total serviÃ§o</div>
               <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>R$ {money(summary.totalService)}</div>
             </div>
           </div>
@@ -131,14 +133,14 @@ function HistoricoContent() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="muted">Sem vendas neste período</p>
+            <p className="muted">Sem vendas neste perÃ­odo</p>
           )}
         </div>
 
         <div className="card section">
           <h2>Detalhe de vendas</h2>
           {orders.length === 0 ? (
-            <p className="muted">Sem vendas neste período</p>
+            <p className="muted">Sem vendas neste perÃ­odo</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table className="table">
@@ -146,10 +148,10 @@ function HistoricoContent() {
                   <tr>
                     <th>Data/Hora</th>
                     <th>Mesa</th>
-                    <th>Garçom</th>
+                    <th>GarÃ§om</th>
                     <th>Itens</th>
                     <th style={{ textAlign: "right" }}>Subtotal</th>
-                    <th style={{ textAlign: "right" }}>Serviço</th>
+                    <th style={{ textAlign: "right" }}>ServiÃ§o</th>
                     <th style={{ textAlign: "right" }}>Total</th>
                     <th style={{ textAlign: "center" }}>Pagamento</th>
                   </tr>

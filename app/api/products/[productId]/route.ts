@@ -1,12 +1,18 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
   try {
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
+
     const { productId } = await params;
     const { name, priceCents, imageUrl, categoryId, stockQty, stockMin } = await request.json();
 
-    const product = await prisma.product.update({
+    const existing = await ctx.tenant.product.findUnique({ where: { id: productId } });
+    if (!existing) return NextResponse.json({ error: "Produto nao encontrado" }, { status: 404 });
+
+    const product = await ctx.tenant.product.update({
       where: { id: productId },
       data: {
         name,
@@ -27,9 +33,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
   try {
+    const ctx = await getTenantContext(request);
+    if (!ctx) return NextResponse.json({ error: "Empresa nao definida" }, { status: 400 });
+
     const { productId } = await params;
 
-    await prisma.product.delete({
+    const existing = await ctx.tenant.product.findUnique({ where: { id: productId } });
+    if (!existing) return NextResponse.json({ error: "Produto nao encontrado" }, { status: 404 });
+
+    await ctx.tenant.product.delete({
       where: { id: productId },
     });
 

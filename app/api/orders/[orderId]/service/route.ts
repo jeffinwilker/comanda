@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
 function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateBps: number) {
   const serviceCents = serviceEnabled ? Math.round(subtotalCents * (serviceRateBps / 10000)) : 0;
@@ -6,21 +6,23 @@ function calcTotals(subtotalCents: number, serviceEnabled: boolean, serviceRateB
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const ctx = await getTenantContext(req);
+  if (!ctx) return new Response("Empresa nao definida", { status: 400 });
+
   const { orderId } = await params;
   const body = await req.json();
 
-  const order = await prisma.order.findUnique({
+  const order = await ctx.tenant.order.findUnique({
     where: { id: orderId },
     include: { items: { include: { product: true } } },
   });
-  if (!order) return new Response("Pedido não encontrado", { status: 400 });
+  if (!order) return new Response("Pedido nao encontrado", { status: 400 });
 
   const updateData: any = {};
 
-  // Se vier 'enabled', atualizar serviceEnabled e recalcular totais
   if (body.enabled !== undefined) {
     if (!["OPEN", "SENT_TO_KITCHEN", "READY", "WAITING_PAYMENT", "CLOSED"].includes(order.status)) {
-      return new Response("Pedido não pode ser alterado", { status: 400 });
+      return new Response("Pedido nao pode ser alterado", { status: 400 });
     }
     const enabled = Boolean(body.enabled);
     const subtotalCents = order.items
@@ -33,12 +35,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ orderI
     updateData.totalCents = totalCents;
   }
 
-  // Se vier 'status', atualizar status
   if (body.status) {
     updateData.status = body.status;
   }
 
-  const updated = await prisma.$transaction(async (tx: any) => {
+  const updated = await ctx.tenant.$transaction(async (tx: any) => {
     const updatedOrder = await tx.order.update({
       where: { id: orderId },
       data: updateData,
