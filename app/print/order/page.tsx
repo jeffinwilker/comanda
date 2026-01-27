@@ -1,12 +1,12 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useAuth } from "@/app/auth-context";
 
-export default function PrintOrder() {
+function PrintOrderContent() {
   const { getCompanyHeaders } = useAuth();
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
@@ -15,7 +15,10 @@ export default function PrintOrder() {
 
   useEffect(() => {
     async function load() {
-      if (!orderId) return;
+      if (!orderId) {
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetch(`/api/orders/${orderId}`, { headers: getCompanyHeaders() });
         const data = await res.json();
@@ -148,5 +151,13 @@ export default function PrintOrder() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function PrintOrder() {
+  return (
+    <Suspense fallback={<div className="page page-narrow">Carregando cupom...</div>}>
+      <PrintOrderContent />
+    </Suspense>
   );
 }
