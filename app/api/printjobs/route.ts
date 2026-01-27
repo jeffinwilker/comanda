@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   return Response.json(jobs);
 }
 
-export async function POST(req: Request, { params }: { params: { orderId: string } }) {
+export async function POST(req: Request) {
   const ctx = await getTenantContext(req);
   if (!ctx) {
     return new Response(JSON.stringify({ error: "Empresa nao definida" }), {
@@ -44,7 +44,14 @@ export async function POST(req: Request, { params }: { params: { orderId: string
     });
   }
 
-  const { orderId } = params;
+  const body = await req.json();
+  const orderId = String(body?.orderId || "").trim();
+  if (!orderId) {
+    return new Response(JSON.stringify({ error: "orderId obrigatorio" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const result = await ctx.tenant.$transaction(async (tx: any) => {
     const order = await tx.order.findUnique({
